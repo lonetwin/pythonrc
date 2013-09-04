@@ -77,8 +77,8 @@ _red   = _wrap_with('31')
 _green = _wrap_with('32')
 _cyan  = _wrap_with('36')
 
-sys.ps1 = _green('>>> ')
-sys.ps2 = _red('... ')
+# sys.ps1 = _green('>>> ')
+# sys.ps2 = _red('... ')
 
 # Enable Pretty Printing for stdout
 def my_displayhook(value):
@@ -111,7 +111,10 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         line = super(EditableBufferInteractiveConsole, self).raw_input(*args)
         if line == EDIT_CMD:
             fd, tmpfl = mkstemp('.py')
-            os.write(fd, b'\n'.join(self.last_buffer))
+            # XXX also flush the .pyhistory so that we can edit more than the
+            # previous command if necessary.
+            readline.write_history_file( HISTFILE )
+            os.write(fd, ''.join(self.last_buffer))
             os.close(fd)
             os.system('%s %s' % (EDITOR, tmpfl))
             line = open(tmpfl).read()
