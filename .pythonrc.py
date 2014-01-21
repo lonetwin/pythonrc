@@ -90,6 +90,7 @@ def my_displayhook(value):
             __builtins__._ = value
 
         pprint.pprint(value)
+
 sys.displayhook = my_displayhook
 
 
@@ -99,13 +100,13 @@ EDIT_CMD = '\e'
 
 class EditableBufferInteractiveConsole(InteractiveConsole, object):
     def __init__(self, *args, **kwargs):
+        self.last_buffer = [] # This holds the last executed statements
+        self.buffer = []      # This holds the statement to be executed
         super(EditableBufferInteractiveConsole, self).__init__(*args, **kwargs)
-        self.last_buffer = [] # This holds the last executed statement
 
-    def runsource(self, source, *args):
-        if source.strip():
-            self.last_buffer = [ source.encode('utf-8') ]
-        return super(EditableBufferInteractiveConsole, self).runsource(source, *args)
+    def resetbuffer(self):
+        self.last_buffer.extend(self.buffer)
+        return super(EditableBufferInteractiveConsole, self).resetbuffer()
 
     def raw_input(self, *args):
         line = super(EditableBufferInteractiveConsole, self).raw_input(*args)
@@ -114,18 +115,22 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
             # XXX also flush the .pyhistory so that we can edit more than the
             # previous command if necessary.
             readline.write_history_file( HISTFILE )
-            os.write(fd, ''.join(self.last_buffer))
+            os.write(fd, '# ' + '\n# '.join(self.last_buffer))
             os.close(fd)
             os.system('%s %s' % (EDITOR, tmpfl))
             line = open(tmpfl).read()
             os.unlink(tmpfl)
             tmpfl = ''
             lines = line.split( '\n' )
+            self.write(_cyan(">>> %s\n" % '\n... '.join(lines)))
             for stmt in lines[:-1]:
                 self.push(stmt)
             line = lines[-1]
-            self.write(_cyan(">>> %s\n" % '\n... '.join(lines)))
+            self.last_buffer = []
         return line
+
+    def write(self, data):
+        sys.stderr.write(_red(data))
 
 __c = EditableBufferInteractiveConsole(locals=locals())
 
