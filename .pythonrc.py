@@ -21,6 +21,7 @@ import os
 import readline, rlcompleter
 import atexit
 import pprint
+import subprocess
 from tempfile import mkstemp
 from code import InteractiveConsole
 
@@ -64,23 +65,24 @@ atexit.register(lambda :readline.write_history_file(HISTFILE))
 
 # Enable Color Prompts
 # - borrowed from fabric (also used in botosh)
-def _wrap_with(code):
-    def inner(text, bold=False):
-        c = code
-        if bold:
-            c = "1;%s" % c
-        return "\033[%sm%s\033[0m" % (c, text)
+def _color_fn(code):
+    inner = lambda text, bold=False: "\033[%sm%s\033[0m" % ('1;%s' % code if bold else code, text)
     return inner
 
+
 # add any colors you might need.
-_red   = _wrap_with('31')
-_green = _wrap_with('32')
-_cyan  = _wrap_with('36')
+_red   = _color_fn('31')
+_green = _color_fn('32')
+_cyan  = _color_fn('36')
 
 # sys.ps1 = _green('>>> ')
 # sys.ps2 = _red('... ')
 
 # Enable Pretty Printing for stdout
+# - get terminal size for passing width param to pprint. Queried just once at
+# startup
+_rows, _cols = subprocess.check_output(['/usr/bin/stty' ' size'], shell=True).strip().split()
+
 def my_displayhook(value):
     if value is not None:
         try:
@@ -89,7 +91,7 @@ def my_displayhook(value):
         except ImportError:
             __builtins__._ = value
 
-        pprint.pprint(value)
+        pprint.pprint(value, width=_cols)
 
 sys.displayhook = my_displayhook
 
@@ -112,10 +114,8 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         line = super(EditableBufferInteractiveConsole, self).raw_input(*args)
         if line == EDIT_CMD:
             fd, tmpfl = mkstemp('.py')
-            # XXX also flush the .pyhistory so that we can edit more than the
-            # previous command if necessary.
-            readline.write_history_file( HISTFILE )
-            os.write(fd, '# ' + '\n# '.join(self.last_buffer))
+            for line in self.last_buffer:
+                os.write(fd, '%s\n' % (line if line.startswith('#') else '# %s' % line))
             os.close(fd)
             os.system('%s %s' % (EDITOR, tmpfl))
             line = open(tmpfl).read()
@@ -126,11 +126,10 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
             for stmt in lines[:-1]:
                 self.push(stmt)
             line = lines[-1]
-            self.last_buffer = []
         return line
 
     def write(self, data):
-        sys.stderr.write(_red(data))
+        sys.stderr.write(_red(data, bold=True))
 
 __c = EditableBufferInteractiveConsole(locals=locals())
 
