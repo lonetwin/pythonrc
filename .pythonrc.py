@@ -91,10 +91,17 @@ def my_displayhook(value):
         except ImportError:
             __builtins__._ = value
 
-        pprint.pprint(value, width=_cols)
+        import re
+        formatted = pprint.pformat(value, width=_cols)
+        if issubclass(type(value), dict):
+            for k in value.keys():
+                formatted = re.sub(
+                        r"'(%s)': " % k,
+                        lambda m: "'%s': " % _red(m.group(1), bold=True),
+                        formatted)
+        print formatted
 
 sys.displayhook = my_displayhook
-
 
 # Start an external editor with \e
 EDITOR = os.environ.get('EDITOR', 'vi')
@@ -131,7 +138,7 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
     def write(self, data):
         sys.stderr.write(_red(data, bold=True))
 
-__c = EditableBufferInteractiveConsole(locals=locals())
+__c = EditableBufferInteractiveConsole()
 
 # Welcome message
 WELCOME = _cyan("""\
