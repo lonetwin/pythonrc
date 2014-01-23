@@ -66,23 +66,28 @@ atexit.register(lambda :readline.write_history_file(HISTFILE))
 # Enable Color Prompts
 # - borrowed from fabric (also used in botosh)
 def _color_fn(code):
-    inner = lambda text, bold=False: "\033[%sm%s\033[0m" % ('1;%s' % code if bold else code, text)
+    def inner(text, bold=False, readline_workaround=False):
+        # - reason for readline_workaround: http://bugs.python.org/issue20359
+        if readline_workaround:
+            return "\001\033[%sm\002%s\001\033[0m\002" % ('1;%d' % code if bold else str(code), text)
+        else:
+            return "\033[%sm%s\033[0m" % ('1;%d' % code if bold else str(code), text)
     return inner
 
 
 # add any colors you might need.
-_red   = _color_fn('31')
-_green = _color_fn('32')
-_cyan  = _color_fn('36')
+_red   = _color_fn(31)
+_green = _color_fn(32)
+_cyan  = _color_fn(36)
 
 # - if we are a remote connection, modify the ps1
 if os.environ.get('SSH_CONNECTION'):
     this_host = os.environ['SSH_CONNECTION'].split()[-2]
-    sys.ps1 = _green('[ %s ] >>> ' % this_host)
-    sys.ps2 = _red('[ %s ] ... '   % this_host)
+    sys.ps1 = _green('[ %s ] >>> ' % this_host, readline_workaround=True)
+    sys.ps2 = _red('[ %s ] ... '   % this_host, readline_workaround=True)
 else:
-    sys.ps1 = _green('>>> ')
-    sys.ps2 = _red('... ')
+    sys.ps1 = _green('>>> ', readline_workaround=True)
+    sys.ps2 = _red('... ', readline_workaround=True)
 
 # Enable Pretty Printing for stdout
 # - get terminal size for passing width param to pprint. Queried just once at
