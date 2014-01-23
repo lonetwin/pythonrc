@@ -75,13 +75,22 @@ _red   = _color_fn('31')
 _green = _color_fn('32')
 _cyan  = _color_fn('36')
 
-# sys.ps1 = _green('>>> ')
-# sys.ps2 = _red('... ')
+# - if we are a remote connection, modify the ps1
+if os.environ.get('SSH_CONNECTION'):
+    this_host = os.environ['SSH_CONNECTION'].split()[-2]
+    sys.ps1 = _green('[ %s ] >>> ' % this_host)
+    sys.ps2 = _red('[ %s ] ... '   % this_host)
+else:
+    sys.ps1 = _green('>>> ')
+    sys.ps2 = _red('... ')
 
 # Enable Pretty Printing for stdout
 # - get terminal size for passing width param to pprint. Queried just once at
 # startup
-_rows, _cols = subprocess.check_output(['/usr/bin/stty' ' size'], shell=True).strip().split()
+try:
+    _rows, _cols = subprocess.check_output('stty size', shell=True).strip().split()
+except:
+    _cols = 80
 
 def my_displayhook(value):
     if value is not None:
@@ -99,7 +108,7 @@ def my_displayhook(value):
                         r"'(%s)': " % k,
                         lambda m: "'%s': " % _red(m.group(1), bold=True),
                         formatted)
-        print formatted
+        print(formatted)
 
 sys.displayhook = my_displayhook
 
