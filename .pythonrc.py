@@ -36,9 +36,9 @@ class IrlCompleter(rlcompleter.Completer):
     the tab if you wish to use a genuine tab.
     """
 
-    def __init__(self):
+    def __init__(self, namespace = None):
         self.tab = '    '
-        rlcompleter.Completer.__init__(self)
+        rlcompleter.Completer.__init__(self, namespace)
 
     def complete(self, text, state):
         if text == '':
@@ -46,10 +46,6 @@ class IrlCompleter(rlcompleter.Completer):
         else:
             return rlcompleter.Completer.complete(self, text, state)
 
-
-# you could change this line to bind another key instead of tab.
-readline.parse_and_bind('tab: complete')
-readline.set_completer(IrlCompleter().complete)
 
 # Enable History
 HISTFILE="%s/.pyhistory" % os.environ["HOME"]
@@ -110,7 +106,7 @@ def my_displayhook(value):
         if issubclass(type(value), dict):
             for k in value.keys():
                 formatted = re.sub(
-                        r"'(%s)': " % k,
+                        r'["\'\\]+(%s)["\'\\]+: ' % k,
                         lambda m: "'%s': " % _red(m.group(1), bold=True),
                         formatted)
         print(formatted)
@@ -152,8 +148,6 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
     def write(self, data):
         sys.stderr.write(_red(data, bold=True))
 
-__c = EditableBufferInteractiveConsole()
-
 # Welcome message
 WELCOME = _cyan("""\
 You've got color, tab completion and pretty-printing. History will be saved
@@ -162,6 +156,15 @@ in %s when you exit.
 Typing '\e' will open your $EDITOR with the last executed statement
 """ % HISTFILE)
 
+# - create our pimped out console
+__c = EditableBufferInteractiveConsole()
+
+# - turn on the completer
+# you could change this line to bind another key instead of tab.
+readline.parse_and_bind('tab: complete')
+readline.set_completer(IrlCompleter(namespace=__c.locals).complete)
+
+# - fire it up !
 __c.interact(banner=WELCOME)
 
 # Exit the Python shell on exiting the InteractiveConsole
