@@ -18,6 +18,7 @@ If you have any other good ideas please feel free to leave a comment.
 """
 import sys
 import os
+import signal
 import readline, rlcompleter
 import atexit
 import pprint
@@ -36,8 +37,8 @@ class IrlCompleter(rlcompleter.Completer):
     the tab if you wish to use a genuine tab.
     """
 
-    def __init__(self, namespace = None):
-        self.tab = '    '
+    def __init__(self, tab='    ', namespace = None):
+        self.tab = tab
         rlcompleter.Completer.__init__(self, namespace)
 
     def complete(self, text, state):
@@ -79,8 +80,8 @@ _cyan  = _color_fn(36)
 # - if we are a remote connection, modify the ps1
 if os.environ.get('SSH_CONNECTION'):
     this_host = os.environ['SSH_CONNECTION'].split()[-2]
-    sys.ps1 = _green('[ %s ] >>> ' % this_host, readline_workaround=True)
-    sys.ps2 = _red('[ %s ] ... '   % this_host, readline_workaround=True)
+    sys.ps1 = _green('[%s]>>> ' % this_host, readline_workaround=True)
+    sys.ps2 = _red('[%s]... '   % this_host, readline_workaround=True)
 else:
     sys.ps1 = _green('>>> ', readline_workaround=True)
     sys.ps2 = _red('... ', readline_workaround=True)
@@ -116,6 +117,7 @@ sys.displayhook = my_displayhook
 # Start an external editor with \e
 EDITOR = os.environ.get('EDITOR', 'vi')
 EDIT_CMD = '\e'
+SH_EXEC  = '!'
 
 class EditableBufferInteractiveConsole(InteractiveConsole, object):
     def __init__(self, *args, **kwargs):
@@ -138,11 +140,24 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
             line = open(tmpfl).read()
             os.unlink(tmpfl)
             tmpfl = ''
-            lines = line.split( '\n' )
-            self.write(_cyan(">>> %s\n" % '\n... '.join(lines)))
+            lines = line.split('\n')
+            self.write(_cyan(">>> %s\n" % '\n... '.join(line for line in lines if not line.startswith('#'))))
             for stmt in lines[:-1]:
-                self.push(stmt)
+                if not stmt.startswith('#'):
+                    self.push(stmt)
             line = lines[-1]
+
+        if line.startswith(SH_EXEC):
+            import __builtin__
+            cmd = line.strip(SH_EXEC)
+            if cmd:
+                out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        shell=True).communicate()
+                print (err and _red(err)) or (out and _green(out))
+                __builtin__._ = (out, err)
+            else:
+                os.kill(os.getpid(), signal.SIGSTOP)
+            line = ''
         return line
 
     def write(self, data):
@@ -150,11 +165,22 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
 
 # Welcome message
 WELCOME = _cyan("""\
-You've got color, tab completion and pretty-printing. History will be saved
-in %s when you exit.
+You've got color, tab completion, pretty-printing, an editable input buffer
+(via the '\e' command) and shell command execution (via the '!' command).
 
-Typing '\e' will open your $EDITOR with the last executed statement
-""" % HISTFILE)
+History will be saved in %s when you exit.
+
+The '\e' command will open %s with the history for the current
+session. On closing the editor any lines not starting with '#' will be executed
+(only one statement can be executed at a time)
+
+The '!' command without anything following it will suspend this process, use fg
+to get back.
+
+If the '!' command is followed by any text, the text will be executed in %s
+and the output/error will be displayed. Additionally '_' will contain the tuple
+(<stdout>, <stderror>) for the execution of the command.
+""" % (HISTFILE, EDITOR, os.environ.get('SHELL', '$SHELL')))
 
 # - create our pimped out console
 __c = EditableBufferInteractiveConsole()
@@ -162,7 +188,7 @@ __c = EditableBufferInteractiveConsole()
 # - turn on the completer
 # you could change this line to bind another key instead of tab.
 readline.parse_and_bind('tab: complete')
-readline.set_completer(IrlCompleter(namespace=__c.locals).complete)
+readline.set_completer(IrlCompleter(tab='\t', namespace=__c.locals).complete)
 
 # - fire it up !
 __c.interact(banner=WELCOME)
