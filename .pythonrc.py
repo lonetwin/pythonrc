@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
 """lonetwin's pimped-up pythonrc
 
-A custom pythonrc which provides colored prompts, intelligent tab completion
-pretty-printing, shortcut to open your $EDITOR with the last executed command
-and it also retains history.
+A custom pythonrc which provides:
+  * colored prompts
+  * intelligent tab completion
+    (for objects and their attributes/methods in the current namespace as well
+     as file-system paths)
+  * pretty-printing
+  * shortcut to open your $EDITOR with the last executed command
+    (the '\e' command)
+  * temporary escape to shell or executing a shell command and capturing the
+    output (the '!' command)
+  * execution history
 
-Ideas borrowed from:
-    * http://eseth.org/2008/pimping-pythonrc.html
-        (which co-incidentally reused something I wrote back in 2005 !! Ain't
-        sharing great ?)
-    * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
+Some ideas borrowed from:
+  * http://eseth.org/2008/pimping-pythonrc.html
+    (which co-incidentally reused something I wrote back in 2005 !! Ain't
+     sharing great ?)
+  * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
 
 This file is executed when the Python interactive shell is started if
 $PYTHONSTARTUP is in your environment and points to this file.
