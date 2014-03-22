@@ -22,6 +22,7 @@ import signal
 import readline, rlcompleter
 import atexit
 import pprint
+import glob
 import subprocess
 from tempfile import mkstemp
 from code import InteractiveConsole
@@ -39,13 +40,24 @@ class IrlCompleter(rlcompleter.Completer):
 
     def __init__(self, tab='    ', namespace = None):
         self.tab = tab
+        # - remove / from the delimiters to enable path completion
+        readline.set_completer_delims(
+                readline.get_completer_delims().replace('/', ''))
         rlcompleter.Completer.__init__(self, namespace)
 
     def complete(self, text, state):
         if text == '':
             return None if state > 0 else self.tab
         else:
-            return rlcompleter.Completer.complete(self, text, state)
+            matches = rlcompleter.Completer.complete(self, text, state)
+            if matches is None:
+                if '/' in text:
+                    try:
+                        matches = glob.glob(text+'*')[state]
+                    except IndexError:
+                        return None
+        return matches
+
 
 
 # Enable History
