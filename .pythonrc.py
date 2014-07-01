@@ -115,21 +115,17 @@ except:
     _cols = 80
 
 def my_displayhook(value):
+    import re
+    import __builtin__
     if value is not None:
-        try:
-            import __builtin__
-            __builtin__._ = value
-        except ImportError:
-            __builtins__._ = value
+        __builtin__._ = value
 
-        import re
         formatted = pprint.pformat(value, width=_cols)
         if issubclass(type(value), dict):
-            for k in value.keys():
-                formatted = re.sub(
-                        r'["\'\\]+(%s)["\'\\]+: ' % k,
-                        lambda m: "'%s': " % _red(m.group(1), bold=True),
-                        formatted)
+            formatted = re.sub(
+                    r'["\'\\]+(\w+)["\'\\]+: ',
+                    lambda m: "'%s': " % _red(m.group(1), bold=True),
+                    formatted)
         print(formatted)
 
 sys.displayhook = my_displayhook
