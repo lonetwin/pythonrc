@@ -96,6 +96,7 @@ def _color_fn(code):
 _red   = _color_fn(31)
 _green = _color_fn(32)
 _cyan  = _color_fn(36)
+_blue  = _color_fn(34)
 
 # - if we are a remote connection, modify the ps1
 if os.environ.get('SSH_CONNECTION'):
@@ -126,7 +127,9 @@ def my_displayhook(value):
                     r'["\'\\]+(\w+)["\'\\]+: ',
                     lambda m: "'%s': " % _red(m.group(1), bold=True),
                     formatted)
-        print(formatted)
+            print(formatted)
+        else:
+            print(_blue(formatted, bold=True))
 
 sys.displayhook = my_displayhook
 
