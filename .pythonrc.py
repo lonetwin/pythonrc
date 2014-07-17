@@ -175,7 +175,15 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
                 print (err and _red(err)) or (out and _green(out))
                 __builtin__._ = (out, err)
             else:
-                os.kill(os.getpid(), signal.SIGSTOP)
+                if os.environ.get('SSH_CONNECTION'):
+                    # I use the bash function below in my .bashrc to directly
+                    # open a python prompt on remote systems I log on to.
+                    #   function rpython { ssh -t $1 -- "python" }
+                    # Unfortunately, suspending this ssh session, does not
+                    # place me in a shell, so I need to create one:
+                    os.system(os.environ.get('SHELL', '/bin/bash'))
+                else:
+                    os.kill(os.getpid(), signal.SIGSTOP)
             line = ''
         return line
 
