@@ -83,7 +83,7 @@ atexit.register(lambda :readline.write_history_file(HISTFILE))
 # Enable Color Prompts
 # - borrowed from fabric (also used in botosh)
 def _color_fn(code):
-    def inner(text, bold=False, readline_workaround=False):
+    def inner(text, bold=True, readline_workaround=False):
         # - reason for readline_workaround: http://bugs.python.org/issue20359
         if readline_workaround:
             return "\001\033[%sm\002%s\001\033[0m\002" % ('1;%d' % code if bold else str(code), text)
@@ -124,12 +124,12 @@ def my_displayhook(value):
         formatted = pprint.pformat(value, width=_cols)
         if issubclass(type(value), dict):
             formatted = re.sub(
-                    r'["\'\\]+(\w+)["\'\\]+: ',
-                    lambda m: "'%s': " % _red(m.group(1), bold=True),
+                    r'''(?P<quote>["']{1,3})(.*?)(?P=quote):''',
+                    lambda m: "'%s': " % _red(m.group(2)),
                     formatted)
             print(formatted)
         else:
-            print(_blue(formatted, bold=True))
+            print(_blue(formatted))
 
 sys.displayhook = my_displayhook
 
@@ -188,7 +188,7 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         return line
 
     def write(self, data):
-        sys.stderr.write(_red(data, bold=True))
+        sys.stderr.write(_red(data))
 
 # Welcome message
 WELCOME = _cyan("""\
