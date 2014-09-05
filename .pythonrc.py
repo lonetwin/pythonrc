@@ -123,10 +123,8 @@ def my_displayhook(value):
 
         formatted = pprint.pformat(value, width=_cols)
         if issubclass(type(value), dict):
-            formatted = re.sub(
-                    r'''(?P<quote>["']{1,3})(.*?)(?P=quote):''',
-                    lambda m: "'%s': " % _red(m.group(2)),
-                    formatted)
+            keys = r'|'.join(value.keys())
+            formatted = re.sub(keys, lambda match: _red(match.group(0)), formatted)
             print(formatted)
         else:
             print(_blue(formatted))
@@ -192,6 +190,9 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
 
 # Welcome message
 WELCOME = _cyan("""\
+        Welcome to lonetwin's pimped up python prompt
+    ( available at https://gist.github.com/lonetwin/5902720 )
+
 You've got color, tab completion, pretty-printing, an editable input buffer
 (via the '\e' command) and shell command execution (via the '!' command).
 
