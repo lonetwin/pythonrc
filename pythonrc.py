@@ -19,11 +19,17 @@ Some ideas borrowed from:
      sharing great ?)
   * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
 
-This file is executed when the Python interactive shell is started if
+This file will be executed when the Python interactive shell is started if
 $PYTHONSTARTUP is in your environment and points to this file.
+
+You could also simply make this file executable and call it directly.
 
 If you have any other good ideas please feel free to leave a comment.
 """
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 import sys
 import os
 import signal
@@ -117,9 +123,8 @@ except:
 
 def my_displayhook(value):
     import re
-    import __builtin__
     if value is not None:
-        __builtin__._ = value
+        builtins._ = value
 
         formatted = pprint.pformat(value, width=_cols)
         if issubclass(type(value), dict):
@@ -165,13 +170,12 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
             line = lines[-1]
 
         if line.startswith(SH_EXEC):
-            import __builtin__
             cmd = line.strip(SH_EXEC)
             if cmd:
                 out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         shell=True).communicate()
                 print (err and _red(err)) or (out and _green(out))
-                __builtin__._ = (out, err)
+                builtins._ = (out, err)
             else:
                 if os.environ.get('SSH_CONNECTION'):
                     # I use the bash function below in my .bashrc to directly
