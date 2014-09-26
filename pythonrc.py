@@ -128,7 +128,7 @@ def my_displayhook(value):
 
         formatted = pprint.pformat(value, width=_cols)
         if issubclass(type(value), dict):
-            keys = r'|'.join(value.keys())
+            keys = r'|'.join(repr(i) for i in value.keys())
             formatted = re.sub(keys, lambda match: _red(match.group(0)), formatted)
             print(formatted)
         else:
