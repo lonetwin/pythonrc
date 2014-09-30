@@ -33,13 +33,15 @@ except ImportError:
 import sys
 import os
 import signal
-import readline, rlcompleter
+import readline
+import rlcompleter
 import atexit
 import pprint
 import glob
 import subprocess
 from tempfile import mkstemp
 from code import InteractiveConsole
+
 
 # Intelligent Tab completion support borrowed from
 # http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
@@ -71,7 +73,6 @@ class IrlCompleter(rlcompleter.Completer):
                     except IndexError:
                         return None
         return matches
-
 
 
 # Enable History
@@ -136,10 +137,10 @@ def my_displayhook(value):
 
 sys.displayhook = my_displayhook
 
-# Start an external editor with \e
-EDITOR = os.environ.get('EDITOR', 'vi')
+EDITOR   = os.environ.get('EDITOR', 'vi')
 EDIT_CMD = '\e'
 SH_EXEC  = '!'
+DOC_CMD  = '?'
 
 class EditableBufferInteractiveConsole(InteractiveConsole, object):
     def __init__(self, *args, **kwargs):
@@ -151,42 +152,50 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         self.last_buffer.extend(self.buffer)
         return super(EditableBufferInteractiveConsole, self).resetbuffer()
 
+    def _process_edit_cmd(self):
+        # - setup the edit buffer
+        fd, tmpfl = mkstemp('.py')
+        lines = '\n'.join('# %s' % line.strip('\n') for line in self.last_buffer)
+        os.write(fd, lines.encode('utf-8'))
+        os.close(fd)
+
+        # - shell out to the editor
+        os.system('%s %s' % (EDITOR, tmpfl))
+
+        # - process commands
+        lines = open(tmpfl).readlines()
+        os.unlink(tmpfl)
+        for stmt in (line for line in lines if not line.startswith('#')):
+            self.write(_cyan("... %s" % stmt))
+            self.push(stmt)
+        return ''
+
+    def _process_sh_cmd(self, cmd):
+        if cmd:
+            out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        shell=True).communicate()
+            print (err and _red(err)) or (out and _green(out))
+            builtins._ = (out, err)
+        else:
+            if os.environ.get('SSH_CONNECTION'):
+                # I use the bash function below in my .bashrc to directly open
+                # a python prompt on remote systems I log on to.
+                #   function rpython { ssh -t $1 -- "python" }
+                # Unfortunately, suspending this ssh session, does not place me
+                # in a shell, so I need to create one:
+                os.system(os.environ.get('SHELL', '/bin/bash'))
+            else:
+                os.kill(os.getpid(), signal.SIGSTOP)
+        return ''
+
     def raw_input(self, *args):
         line = super(EditableBufferInteractiveConsole, self).raw_input(*args)
         if line == EDIT_CMD:
-            fd, tmpfl = mkstemp('.py')
-            for line in self.last_buffer:
-                os.write(fd, '%s\n' % (line if line.startswith('#') else '# %s' % line))
-            os.close(fd)
-            os.system('%s %s' % (EDITOR, tmpfl))
-            line = open(tmpfl).read()
-            os.unlink(tmpfl)
-            tmpfl = ''
-            lines = line.split('\n')
-            self.write(_cyan(">>> %s\n" % '\n... '.join(line for line in lines if not line.startswith('#'))))
-            for stmt in lines[:-1]:
-                if not stmt.startswith('#'):
-                    self.push(stmt)
-            line = lines[-1]
-
-        if line.startswith(SH_EXEC):
-            cmd = line.strip(SH_EXEC)
-            if cmd:
-                out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        shell=True).communicate()
-                print (err and _red(err)) or (out and _green(out))
-                builtins._ = (out, err)
-            else:
-                if os.environ.get('SSH_CONNECTION'):
-                    # I use the bash function below in my .bashrc to directly
-                    # open a python prompt on remote systems I log on to.
-                    #   function rpython { ssh -t $1 -- "python" }
-                    # Unfortunately, suspending this ssh session, does not
-                    # place me in a shell, so I need to create one:
-                    os.system(os.environ.get('SHELL', '/bin/bash'))
-                else:
-                    os.kill(os.getpid(), signal.SIGSTOP)
-            line = ''
+            line = self._process_edit_cmd()
+        elif line.startswith(SH_EXEC):
+            line = self._process_sh_cmd(line.strip(SH_EXEC))
+        elif line.endswith(DOC_CMD):
+            line = 'print(%s.__doc__)' % line.strip(DOC_CMD)
         return line
 
     def write(self, data):
