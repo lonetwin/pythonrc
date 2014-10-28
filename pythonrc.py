@@ -174,8 +174,9 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
 
     def _process_sh_cmd(self, cmd):
         if cmd:
-            out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        shell=True).communicate()
+            out, err = subprocess.Popen(cmd.split(),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE).communicate()
             print (err and _red(err)) or (out and _green(out))
             builtins._ = (out, err)
         else:
@@ -211,18 +212,22 @@ WELCOME = _cyan("""\
 You've got color, tab completion, pretty-printing, an editable input buffer
 (via the '\e' command) and shell command execution (via the '!' command).
 
-History will be saved in %s when you exit.
+- History will be saved in %s when you exit.
 
-The '\e' command will open %s with the history for the current
-session. On closing the editor any lines not starting with '#' will be executed
-(only one statement can be executed at a time)
+- The '\e' command will open %s with the history for the current session. On
+  closing the editor any lines not starting with '#' will be executed (only one
+  statement can be executed at a time)
 
-The '!' command without anything following it will suspend this process, use fg
-to get back.
+- The '!' command without anything following it will suspend this process, use
+  fg to get back.
 
-If the '!' command is followed by any text, the text will be executed in %s
-and the output/error will be displayed. Additionally '_' will contain the tuple
-(<stdout>, <stderror>) for the execution of the command.
+  If the '!' command is followed by any text, the text will be executed in %s
+  and the output/error will be displayed. Additionally '_' will contain the
+  tuple (<stdout>, <stderror>) for the execution of the command.
+
+- Simply typing out a defined name followed by a '?' will print out the
+  object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
+
 """ % (HISTFILE, EDITOR, os.environ.get('SHELL', '$SHELL')))
 
 # - create our pimped out console
