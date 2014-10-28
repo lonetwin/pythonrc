@@ -167,7 +167,9 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         os.unlink(tmpfl)
         for stmt in (line for line in lines if not line.startswith('#')):
             self.write(_cyan("... %s" % stmt))
-            self.push(stmt)
+            more = self.push(stmt.strip('\n'))
+            if not more:
+                self.push('\n')
         return ''
 
     def _process_sh_cmd(self, cmd):
