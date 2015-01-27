@@ -64,14 +64,13 @@ class IrlCompleter(rlcompleter.Completer):
     def complete(self, text, state):
         if text == '':
             return None if state > 0 else self.tab
-        else:
-            matches = rlcompleter.Completer.complete(self, text, state)
-            if matches is None:
-                if '/' in text:
-                    try:
-                        matches = glob.glob(text+'*')[state]
-                    except IndexError:
-                        return None
+        matches = rlcompleter.Completer.complete(self, text, state)
+        if matches is None:
+            if '/' in text:
+                try:
+                    matches = glob.glob(text+'*')[state]
+                except IndexError:
+                    return None
         return matches
 
 
@@ -213,8 +212,7 @@ You've got color, tab completion, pretty-printing, an editable input buffer
 - History will be saved in %s when you exit.
 
 - The '\e' command will open %s with the history for the current session. On
-  closing the editor any lines not starting with '#' will be executed (only one
-  statement can be executed at a time)
+  closing the editor any lines not starting with '#' will be executed.
 
 - The '!' command without anything following it will suspend this process, use
   fg to get back.
