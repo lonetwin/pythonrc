@@ -143,27 +143,27 @@ DOC_CMD  = '?'
 
 class EditableBufferInteractiveConsole(InteractiveConsole, object):
     def __init__(self, *args, **kwargs):
-        self.last_buffer = [] # This holds the last executed statements
-        self.buffer = []      # This holds the statement to be executed
+        self.session_history = [] # This holds the last executed statements
+        self.buffer = []          # This holds the statement to be executed
         super(EditableBufferInteractiveConsole, self).__init__(*args, **kwargs)
 
     def resetbuffer(self):
-        self.last_buffer.extend(self.buffer)
+        self.session_history.extend(self.buffer)
         return super(EditableBufferInteractiveConsole, self).resetbuffer()
 
     def _process_edit_cmd(self):
         # - setup the edit buffer
-        fd, tmpfl = mkstemp('.py')
-        lines = '\n'.join('# %s' % line.strip('\n') for line in self.last_buffer)
+        fd, filename = mkstemp('.py')
+        lines = '\n'.join('# %s' % line.strip('\n') for line in self.session_history)
         os.write(fd, lines.encode('utf-8'))
         os.close(fd)
 
         # - shell out to the editor
-        os.system('%s %s' % (EDITOR, tmpfl))
+        os.system('%s %s' % (EDITOR, filename))
 
         # - process commands
-        lines = open(tmpfl).readlines()
-        os.unlink(tmpfl)
+        lines = open(filename).readlines()
+        os.unlink(filename)
         for stmt in (line for line in lines if not line.startswith('#')):
             self.write(_cyan("... %s" % stmt))
             self.push(stmt.strip('\n'))
@@ -195,7 +195,7 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         elif line.startswith(SH_EXEC):
             line = self._process_sh_cmd(line.strip(SH_EXEC))
         elif line.endswith(DOC_CMD):
-            line = 'print(%s.__doc__)' % line.strip(DOC_CMD)
+            line = 'print(%s.__doc__)' % line.strip(DOC_CMD) if line.strip(DOC_CMD) else 'dir()'
         return line
 
     def write(self, data):
