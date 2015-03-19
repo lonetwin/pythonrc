@@ -162,11 +162,14 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
         os.system('%s %s' % (EDITOR, filename))
 
         # - process commands
-        lines = open(filename).readlines()
+        lines = open(filename)
         os.unlink(filename)
-        for stmt in (line for line in lines if not line.startswith('#')):
+        for stmt in lines:
             self.write(_cyan("... %s" % stmt))
-            self.push(stmt.strip('\n'))
+            line = stmt.strip('\n')
+            if not line.strip().startswith('#'):
+                self.push(line)
+                readline.add_history(line)
         return ''
 
     def _process_sh_cmd(self, cmd):
