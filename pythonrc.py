@@ -24,7 +24,7 @@
 """lonetwin's pimped-up pythonrc
 
 A custom pythonrc which provides:
-  * colored prompts
+  * colored prompts (python verison aware ! :) )
   * intelligent tab completion
     (for objects and their attributes/methods in the current namespace as well
      as file-system paths)
@@ -121,18 +121,24 @@ def _color_fn(code):
 
 
 # add any colors you might need.
-_red   = _color_fn(31)
-_green = _color_fn(32)
-_cyan  = _color_fn(36)
-_blue  = _color_fn(34)
+_red    = _color_fn(31)
+_green  = _color_fn(32)
+_yellow = _color_fn(33)
+_blue   = _color_fn(34)
+_purple = _color_fn(35)
+_cyan   = _color_fn(36)
+
+# - set prompt color depending on the version
+prompt_color = _green if sys.version_info.major == 2 else _yellow
 
 # - if we are a remote connection, modify the ps1
+py_ver = sys.version_info.major
 if os.environ.get('SSH_CONNECTION'):
     this_host = os.environ['SSH_CONNECTION'].split()[-2]
-    sys.ps1 = _green('[%s]>>> ' % this_host, readline_workaround=True)
+    sys.ps1 = prompt_color('[%s]>>> ' % this_host, readline_workaround=True)
     sys.ps2 = _red('[%s]... '   % this_host, readline_workaround=True)
 else:
-    sys.ps1 = _green('>>> ', readline_workaround=True)
+    sys.ps1 = prompt_color('>>> ', readline_workaround=True)
     sys.ps2 = _red('... ', readline_workaround=True)
 
 # Enable Pretty Printing for stdout
@@ -199,12 +205,13 @@ class EditableBufferInteractiveConsole(InteractiveConsole, object):
             out, err = subprocess.Popen(cmd.split(),
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE).communicate()
-            print (err and _red(err)) or (out and _green(out))
+            print (err and _red(err)) or (out and _green(out, bold=False))
             builtins._ = (out, err)
         else:
             if os.environ.get('SSH_CONNECTION'):
-                # I use the bash function below in my .bashrc to directly open
-                # a python prompt on remote systems I log on to.
+                # I use the bash function similar to the one below in my
+                # .bashrc to directly open a python prompt on remote
+                # systems I log on to.
                 #   function rpython { ssh -t $1 -- "python" }
                 # Unfortunately, suspending this ssh session, does not place me
                 # in a shell, so I need to create one:
@@ -234,19 +241,19 @@ WELCOME = _cyan("""\
 You've got color, tab completion, pretty-printing, an editable input buffer
 (via the '\e' command) and shell command execution (via the '!' command).
 
-- History will be saved in %s when you exit.
+* History will be saved in %s when you exit.
 
-- The '\e' command will open %s with the history for the current session. On
+* The '\e' command will open %s with the history for the current session. On
   closing the editor any lines not starting with '#' will be executed.
 
-- The '!' command without anything following it will suspend this process, use
+* The '!' command without anything following it will suspend this process, use
   fg to get back.
 
   If the '!' command is followed by any text, the text will be executed in %s
   and the output/error will be displayed. Additionally '_' will contain the
   tuple (<stdout>, <stderror>) for the execution of the command.
 
-- Simply typing out a defined name followed by a '?' will print out the
+* Simply typing out a defined name followed by a '?' will print out the
   object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
 
 """ % (HISTFILE, EDITOR, os.environ.get('SHELL', '$SHELL')))
