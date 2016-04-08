@@ -264,6 +264,10 @@ __c = EditableBufferInteractiveConsole()
 # - turn on the completer
 # you could change this line to bind another key instead of tab.
 readline.parse_and_bind('tab: complete')
+# - when performing completion in the middle of a word, do not insert characters
+# from the completion that match characters after point in the word being
+# completed
+readline.parse_and_bind('set skip-completed-text on')
 readline.set_completer(IrlCompleter(tab='\t', namespace=__c.locals).complete)
 
 # - fire it up !
