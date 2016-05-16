@@ -94,7 +94,24 @@ purple = create_color_fn(35)
 cyan   = create_color_fn(36)
 
 # - set prompt color depending on the version
-prompt_color = green if sys.version_info.major == 2 else yellow
+if sys.version_info.major == 2:
+    prompt_color = green
+else:
+    import pip
+    from importlib import import_module
+    from importlib.abc import MetaPathFinder
+    prompt_color = yellow
+    class PipMetaPathFinder(MetaPathFinder):
+        """A importlib.abc.MetaPathFinder to auto-install missing modules using pip
+        """
+        def find_spec(fullname, path, target=None):
+            if path == None:
+                installed = pip.main(['install', fullname])
+                if installed == 0:
+                    return import_module(fullname)
+
+    sys.meta_path.append(PipMetaPathFinder)
+
 
 class ImprovedConsole(InteractiveConsole, object):
 
