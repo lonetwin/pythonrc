@@ -23,15 +23,22 @@
 
 """lonetwin's pimped-up pythonrc
 
-A custom pythonrc which provides:
+This file will be executed when the Python interactive shell is started, if
+$PYTHONSTARTUP is in your environment and points to this file.
+
+You could also simply make this file executable and call it directly.
+
+This file create an InteractiveConsole instance, which provides:
   * colored prompts and pretty printing
-  * intelligent tab completion
-    (with preceding text, for objects, their attributes/methods, names in the
-    current namespace as well as file-system paths, without preceding text
-    four spaces)
+  * intelligent tab completion:¹
+    - with preceding text
+        + names in the current namespace
+        + for objects, their attributes/methods
+        + for strings with a '/', pathname completion
+    - without preceding text four spaces
   * shortcut to open your $EDITOR with the last executed command
     (the '\e' command)
-  * temporary escape to $SHELL or ability to execut a shell command and
+  * temporary escape to $SHELL or ability to execute a shell command and
     capturing the output in to the '_' variable (the '!' command)
   * execution history
   * convenient printing of doc stings (the '?' command)
@@ -42,19 +49,19 @@ Some ideas borrowed from:
      sharing great ?)
   * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
 
-This file will be executed when the Python interactive shell is started if
-$PYTHONSTARTUP is in your environment and points to this file.
-
-You could also simply make this file executable and call it directly.
-
 If you have any other good ideas please feel free to leave a comment.
+
+¹ Since python 3.4 the default interpreter also has tab completion enabled
+however it does not do pathname completion
 """
+
 try:
     import builtins
 except ImportError:
     import __builtin__ as builtins
 import atexit
 import glob
+import keyword
 import os
 import pprint
 import re
@@ -75,42 +82,23 @@ EDITOR   = os.environ.get('EDITOR', 'vi')
 SHELL    = os.environ.get('SHELL', '$SHELL')
 
 
-def create_color_fn(code):
-    def inner(text, bold=True, readline_workaround=False):
+def create_color_func(code):
+    def color_func(text, bold=True, readline_workaround=False):
         code_str = '1;{}'.format(code) if bold else code
         # - reason for readline_workaround: http://bugs.python.org/issue20359
         if readline_workaround:
             return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
         else:
             return "\033[{}m{}\033[0m".format(code_str, text)
-    return inner
+    return color_func
 
 # add any colors you might need.
-red    = create_color_fn(31)
-green  = create_color_fn(32)
-yellow = create_color_fn(33)
-blue   = create_color_fn(34)
-purple = create_color_fn(35)
-cyan   = create_color_fn(36)
-
-# - set prompt color depending on the version
-if sys.version_info.major == 2:
-    prompt_color = green
-else:
-    import pip
-    from importlib import import_module
-    from importlib.abc import MetaPathFinder
-    prompt_color = yellow
-    class PipMetaPathFinder(MetaPathFinder):
-        """A importlib.abc.MetaPathFinder to auto-install missing modules using pip
-        """
-        def find_spec(fullname, path, target=None):
-            if path == None:
-                installed = pip.main(['install', fullname])
-                if installed == 0:
-                    return import_module(fullname)
-
-    sys.meta_path.append(PipMetaPathFinder)
+red    = create_color_func(31)
+green  = create_color_func(32)
+yellow = create_color_func(33)
+blue   = create_color_func(34)
+purple = create_color_func(35)
+cyan   = create_color_func(36)
 
 
 class ImprovedConsole(InteractiveConsole, object):
@@ -127,8 +115,11 @@ class ImprovedConsole(InteractiveConsole, object):
         super(ImprovedConsole, self).__init__(*args, **kwargs)
         self._init_readline()
         self._init_prompt()
+        self._init_pprint()
 
     def _init_readline(self):
+        """Activates history and tab completion
+        """
         # - init history
         if os.path.exists(HISTFILE):
             readline.read_history_file(HISTFILE)
@@ -141,44 +132,49 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - other useful stuff
         readline.parse_and_bind('set skip-completed-text on')
-
-        # - remove / from the delimiters to help identify possibility
-        # for path completion and set the completer function
-        readline.set_completer_delims(
-                readline.get_completer_delims().replace('/', ''))
         readline.set_completer(self._improved_rlcompleter())
 
     def _init_prompt(self):
+        """Activates color on the prompt based on python version.
+
+        Also adds the hosts IP if running on a remote host over a
+        ssh connection.
+        """
+        prompt_color = green if sys.version_info.major == 2 else yellow
+        sys.ps1 = prompt_color('>>> ', readline_workaround=True)
+        sys.ps2 = red('... ', readline_workaround=True)
         # - if we are a remote connection, modify the ps1
         if os.environ.get('SSH_CONNECTION'):
             this_host = os.environ['SSH_CONNECTION'].split()[-2]
             sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
             sys.ps2 = red('[{}]... '.format(this_host), readline_workaround=True)
-        else:
-            sys.ps1 = prompt_color('>>> ', readline_workaround=True)
-            sys.ps2 = red('... ', readline_workaround=True)
 
+    def _init_pprint(self):
+        """Activates pretty-printing of output values.
+        """
         try:
-            _, self._cols = subprocess.check_output('stty size', shell=True).strip().split()
+            rows, cols = subprocess.check_output('stty size', shell=True).strip().split()
         except:
-            self._cols = 80
-
-        sys.displayhook = self.pprint_callback
-
-    def pprint_callback(self, value):
-        if value is not None:
-            builtins._ = value
-
-            formatted = pprint.pformat(value, width=self._cols)
-            if issubclass(type(value), dict):
-                keys = r'|'.join(repr(i) for i in value.keys())
-                formatted = re.sub(keys, lambda match: red(match.group(0)), formatted)
-                print(formatted)
-            else:
-                print(blue(formatted))
+            cols = 80
+        def pprint_callback(value):
+            if value is not None:
+                formatted = pprint.pformat(value, width=cols)
+                if issubclass(type(value), dict):
+                    formatted = re.sub(r'([ {][^{:]+?: )+?', lambda m: purple(m.group()), formatted)
+                    # keys = r'|'.join(repr(i) for i in value.keys())
+                    # formatted = re.sub(keys, lambda match: red(match.group(0)), formatted)
+                    print(formatted)
+                else:
+                   print(blue(formatted))
+        sys.displayhook = pprint_callback
 
     def _improved_rlcompleter(self):
+        """Enhances the default rlcompleter to also do pathname completion
+        """
         rlcompleter_instance = rlcompleter.Completer(namespace=self.locals)
+        # - remove / from the delimiters to help identify possibility
+        # for path completion and set the completer function
+        readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
         def complete_wrapper(text, state):
             if text == '':
                 return None if state > 0 else self.tab
@@ -186,13 +182,15 @@ class ImprovedConsole(InteractiveConsole, object):
             if match is None:
                 if '/' in text:
                     try:
-                        match =  glob.glob(text+'*')[state]
+                        match = glob.glob(text+'*')[state]
                     except IndexError:
                         return None
             return match
         return complete_wrapper
 
     def raw_input(self, *args):
+        """Read the input and delegate if necessary.
+        """
         line = InteractiveConsole.raw_input(self, *args)
         if line == self.HELP_CMD:
             print(HELP)
@@ -203,10 +201,17 @@ class ImprovedConsole(InteractiveConsole, object):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
         elif line.endswith(self.DOC_CMD):
             line = line.strip(self.DOC_CMD)
-            line = 'print({}.__doc__)'.format(line) if line else 'dir()'
+            if not line:
+                line = 'dir()'
+            elif keyword.iskeyword(line):
+                line = 'help("{}")'.format(line)
+            else:
+                line = 'print({}.__doc__)'.format(line)
         return line
 
     def write(self, data):
+        """Write out errors to stderr
+        """
         sys.stderr.write(red(data))
 
     def resetbuffer(self):
