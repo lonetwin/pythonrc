@@ -76,7 +76,7 @@ from collections import namedtuple
 from tempfile import mkstemp
 
 
-HISTFILE = os.path.expanduser("~/.pyhistory")
+HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000
 EDITOR   = os.environ.get('EDITOR', 'vi')
 SHELL    = os.environ.get('SHELL', '$SHELL')
