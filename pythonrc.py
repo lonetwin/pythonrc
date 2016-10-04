@@ -158,6 +158,7 @@ class ImprovedConsole(InteractiveConsole, object):
             cols = 80
         def pprint_callback(value):
             if value is not None:
+                builtins._ = value
                 formatted = pprint.pformat(value, width=cols)
                 if issubclass(type(value), dict):
                     formatted = re.sub(r'([ {][^{:]+?: )+?', lambda m: purple(m.group()), formatted)
