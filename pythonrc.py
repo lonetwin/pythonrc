@@ -312,9 +312,23 @@ object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
 # - create our pimped out console
 pymp = ImprovedConsole()
 
+banner="Welcome to the ImprovedConsole. Type in \h for list of features"
+
 # - fire it up !
-pymp.interact(banner="Welcome to the ImprovedConsole. "
-                     "Type in \h for list of features.")
+while True:
+    try:
+        pymp.interact(banner=banner)
+    except:
+        import traceback
+        print(red("I'm sorry, ImprovedConsole could not handle that !\n"
+                  "Please report an error with this traceback, I would really appreciate that !"))
+        traceback.print_exc()
+
+        print(red("I shall try to restore the crashed session.\n"
+                  "If the crash occurs again, please exit the session"))
+        banner=blue("Your crashed session has been restored")
+    else:
+        break
 
 # Exit the Python shell on exiting the InteractiveConsole
 sys.exit()
