@@ -244,14 +244,17 @@ class ImprovedConsole(InteractiveConsole, object):
         cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
             cmd = cmd.format(**self.locals)
-            process = subprocess.Popen(cmd.split(),
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-            out, err = process.communicate()
-            rc = process.returncode
-            print (err and red(err)) or (out and green(out, bold=False))
-            builtins._ = cmd_exec(out, err, rc)
-            del cmd_exec
+            try:
+                process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+            except:
+                self.showtraceback()
+            else:
+                out, err = process.communicate()
+                rc = process.returncode
+                print ('{}'.format(red(err.decode('utf-8')
+                       if err else green(out.decode('utf-8'), bold=False))))
+                builtins._ = cmd_exec(out, err, rc)
+                del cmd_exec
         else:
             if os.environ.get('SSH_CONNECTION'):
                 # I use the bash function similar to the one below in my
