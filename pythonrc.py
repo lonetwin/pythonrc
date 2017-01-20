@@ -64,6 +64,7 @@ import atexit
 import glob
 import keyword
 import os
+import pkgutil
 import pprint
 import re
 import readline
@@ -108,6 +109,7 @@ class ImprovedConsole(InteractiveConsole, object):
     SH_EXEC  = '!'
     DOC_CMD  = '?'
     HELP_CMD = '\h'
+    STDLIB   = frozenset(name for _, name, _ in pkgutil.iter_modules())
 
     def __init__(self, tab='    ', *args, **kwargs):
         self.session_history = [] # This holds the last executed statements
@@ -178,9 +180,15 @@ class ImprovedConsole(InteractiveConsole, object):
         # for path completion and set the completer function
         readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
         def complete_wrapper(text, state):
-            if text == '':
+            line = readline.get_line_buffer().strip()
+            if line == '':
                 return None if state > 0 else self.tab
+            elif line.startswith('import'):
+                matches = [ name for name in self.STDLIB if name.startswith(text) ]
+                return matches[state]
             match = rlcompleter_instance.complete(text, state)
+            if keyword.iskeyword(match):
+                return "{} ".format(match)
             if match is None:
                 if '/' in text:
                     try:
