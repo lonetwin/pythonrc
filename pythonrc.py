@@ -109,7 +109,7 @@ class ImprovedConsole(InteractiveConsole, object):
     SH_EXEC  = '!'
     DOC_CMD  = '?'
     HELP_CMD = '\h'
-    STDLIB   = frozenset(name for _, name, _ in pkgutil.iter_modules())
+    MODLIST  = frozenset(name for _, name, _ in pkgutil.iter_modules())
 
     def __init__(self, tab='    ', *args, **kwargs):
         self.session_history = [] # This holds the last executed statements
@@ -146,7 +146,7 @@ class ImprovedConsole(InteractiveConsole, object):
         prompt_color = green if sys.version_info.major == 2 else yellow
         sys.ps1 = prompt_color('>>> ', readline_workaround=True)
         sys.ps2 = red('... ', readline_workaround=True)
-        # - if we are a remote connection, modify the ps1
+        # - if we are over a remote connection, modify the ps1
         if os.environ.get('SSH_CONNECTION'):
             this_host = os.environ['SSH_CONNECTION'].split()[-2]
             sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
@@ -165,37 +165,38 @@ class ImprovedConsole(InteractiveConsole, object):
                 formatted = pprint.pformat(value, width=cols)
                 if issubclass(type(value), dict):
                     formatted = re.sub(r'([ {][^{:]+?: )+?', lambda m: purple(m.group()), formatted)
-                    # keys = r'|'.join(repr(i) for i in value.keys())
-                    # formatted = re.sub(keys, lambda match: red(match.group(0)), formatted)
                     print(formatted)
                 else:
                    print(blue(formatted))
         sys.displayhook = pprint_callback
 
     def _improved_rlcompleter(self):
-        """Enhances the default rlcompleter to also do pathname completion
+        """Enhances the default rlcompleter
+
+        The function enhances the default rlcompleter by also doing
+        pathname completion and module name completion for import
+        statements. Additionally, it inserts a tab instead of attempting
+        completion if there is no preceding text.
         """
-        rlcompleter_instance = rlcompleter.Completer(namespace=self.locals)
-        # - remove / from the delimiters to help identify possibility
-        # for path completion and set the completer function
+        completer = rlcompleter.Completer(namespace=self.locals)
+        # - remove / from the delimiters to help identify possibility for path completion
         readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
         def complete_wrapper(text, state):
             line = readline.get_line_buffer().strip()
             if line == '':
                 return None if state > 0 else self.tab
-            elif line.startswith('import'):
-                matches = [ name for name in self.STDLIB if name.startswith(text) ]
-                return matches[state]
-            match = rlcompleter_instance.complete(text, state)
-            if keyword.iskeyword(match):
-                return "{} ".format(match)
-            if match is None:
-                if '/' in text:
-                    try:
-                        match = glob.glob(text+'*')[state]
-                    except IndexError:
-                        return None
-            return match
+            if state == 0:
+                if line.startswith('import') or line.startswith('from'):
+                    completer.matches = [ name for name in self.MODLIST if name.startswith(text) ]
+                else:
+                    match = completer.complete(text, state)
+                    if match is None and '/' in text:
+                        completer.matches = glob.glob(text+'*')
+            try:
+                match = completer.matches[state]
+                return '{}{}'.format(match, ' ' if keyword.iskeyword(match) else '')
+            except IndexError:
+                return None
         return complete_wrapper
 
     def raw_input(self, *args):
@@ -210,7 +211,7 @@ class ImprovedConsole(InteractiveConsole, object):
         elif line.startswith(self.SH_EXEC):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
         elif line.endswith(self.DOC_CMD):
-            line = line.strip(self.DOC_CMD)
+            line = line.strip(self.DOC_CMD + '.(')
             if not line:
                 line = 'dir()'
             elif keyword.iskeyword(line):
