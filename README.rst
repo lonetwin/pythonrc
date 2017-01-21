@@ -23,20 +23,21 @@ Features
 
 The file creates an InteractiveConsole_ instance and executes it. This instance
 provides:
-  * colored prompts and pretty printing
-  * intelligent tab completion [1]_ :
+
+* colored prompts and pretty printing
+* intelligent tab completion [1]_
+    - without preceding text four spaces
     - with preceding text
         + names in the current namespace
         + for objects, their attributes/methods
         + for strings with a ``/``, pathname completion
         + module name completion in an import statement
-    - without preceding text four spaces
-  * shortcut to open your ``$EDITOR`` with the last executed command (the ``\e``
-    command)
-  * temporary escape to ``$SHELL`` or ability to execute a shell command and
-    capturing the output in to the ``_`` variable (the ``!`` command)
-  * execution history
-  * convenient printing of doc stings (the ``?`` command)
+* shortcut to open your ``$EDITOR`` with the last executed command (the ``\e``
+  command)
+* temporary escape to ``$SHELL`` or ability to execute a shell command and
+  capturing the output in to the ``_`` variable (the ``!`` command)
+* execution history
+* convenient printing of doc stings (the ``?`` command)
 
 If you have any other good ideas please feel free to submit pull requests or
 issues.
@@ -62,4 +63,3 @@ suggestions in case somebody bothers to use it and contribute back.
 .. _InteractiveConsole: https://docs.python.org/3.6/library/code.html#code.InteractiveConsole
 .. _2005: http://code.activestate.com/recipes/438813/
 .. _gist: https://gist.github.com/lonetwin/5902720
-
