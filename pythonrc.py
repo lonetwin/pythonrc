@@ -22,7 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""lonetwin's pimped-up pythonrc
+"""pymp - lonetwin's pimped-up pythonrc
 
 This file will be executed when the Python interactive shell is started, if
 $PYTHONSTARTUP is in your environment and points to this file.

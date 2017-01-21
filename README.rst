@@ -6,9 +6,13 @@ What is this ?
 ==============
 
 This is a python script intended to improve on the default Python interactive
-shell experience. Unlike, ipython_, bpython_ or any of the many other options
-out there, this is not intended to be used as a module. The intent is to keep it
-as a single file and use it as any other rcfile.
+shell experience.
+
+Unlike ipython_, bpython_ or any of the many other options out there, this is
+not designed to be used as a separate interactive environment. The intent is to
+keep it as a single file and use it as any other rcfile. This script relies
+solely on the standard python library and will always remain
+that way.
 
 Usage
 =====
