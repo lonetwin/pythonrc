@@ -8,22 +8,23 @@ What is this ?
 This is a python script intended to improve on the default Python interactive
 shell experience. Unlike, ipython_, bpython_ or any of the many other options
 out there, this is not intended to be used as a module. The intent is to keep it
-as a single file and used it as any other rcfile.
+as a single file and use it as any other rcfile.
 
 Usage
 =====
 
-This file will be executed when the Python interactive shell is started, if
-``$PYTHONSTARTUP`` is in your environment and points to this file.
+The ``pythonrc`` file will be executed when the Python interactive shell is
+started, if ``$PYTHONSTARTUP`` is in your environment and points to the file.
 
-You could also simply make this file executable and call it directly.
+You could also simply make the file executable and call it directly.
 
 Features
 ========
 
-This file creates an InteractiveConsole instance, which provides:
+The file creates an InteractiveConsole_ instance and executes it. This instance
+provides:
   * colored prompts and pretty printing
-  * intelligent tab completion[1]_:
+  * intelligent tab completion [1]_ :
     - with preceding text
         + names in the current namespace
         + for objects, their attributes/methods
@@ -57,6 +58,8 @@ suggestions in case somebody bothers to use it and contribute back.
 
 .. [1] Since python 3.4 the default interpreter also has tab completion enabled however it does not do pathname completion
 .. _ipython: https://ipython.org/
-.. _brpython: https://bpython-interpreter.org/
+.. _bpython: https://bpython-interpreter.org/
+.. _InteractiveConsole: https://docs.python.org/3.6/library/code.html#code.InteractiveConsole
 .. _2005: http://code.activestate.com/recipes/438813/
 .. _gist: https://gist.github.com/lonetwin/5902720
+
