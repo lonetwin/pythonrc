@@ -255,7 +255,7 @@ class ImprovedConsole(InteractiveConsole, object):
         if cmd:
             cmd = cmd.format(**self.locals)
             try:
-                process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+                process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             except:
                 self.showtraceback()
             else:
