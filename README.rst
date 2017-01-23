@@ -14,6 +14,10 @@ keep it as a single file and use it as any other rcfile. This script relies
 solely on the standard python library and will always remain
 that way.
 
+Demo
+=====
+|demo|
+
 Usage
 =====
 
@@ -67,3 +71,5 @@ suggestions in case somebody bothers to use it and contribute back.
 .. _InteractiveConsole: https://docs.python.org/3.6/library/code.html#code.InteractiveConsole
 .. _2005: http://code.activestate.com/recipes/438813/
 .. _gist: https://gist.github.com/lonetwin/5902720
+.. |demo| image:: https://asciinema.org/a/100447.png
+          :target: https://asciinema.org/a/100447?speed=2
