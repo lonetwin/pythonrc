@@ -90,24 +90,24 @@ gist_ I used to maintain. In essence, this code fails::
     ImportError: cannot import name sayHello
     >>>
 
-  There are two possible workarounds for this:
+There are two possible workarounds for this:
 
-  * When within the console, if you have to reference local names via
-    `__main__`, remember to do it via `__main__.pymp.locals` instead, something
-    like (for the example above)::
+* When within the console, if you have to reference local names via
+  `__main__`, remember to do it via `__main__.pymp.locals` instead, something
+  like (for the example above)::
 
-        ...
-        def getExecutionTime():
-            t = timeit.Timer("sayHello()", "from __main__ import pymp; sayHello = pymp.locals['sayHello']")
-        ...
+      ...
+      def getExecutionTime():
+          t = timeit.Timer("sayHello()", "from __main__ import pymp; sayHello = pymp.locals['sayHello']")
+      ...
 
-  * Or in the pythonrc file, change the initialization of `ImprovedConsole` to
-    accept `locals()`. That is something like this::
+* Or in the pythonrc file, change the initialization of `ImprovedConsole` to
+  accept `locals()`. That is something like this::
 
-        pymp = ImprovedConsole(locals=locals())
+      pymp = ImprovedConsole(locals=locals())
 
-    Although the downside of this is, doing it will pollute your console
-    namespace with everything in the pythonrc file.
+  Although the downside of this is, doing it will pollute your console
+  namespace with everything in the pythonrc file.
 
 
 .. [1] Since python 3.4 the default interpreter also has tab completion enabled however it does not do pathname completion
