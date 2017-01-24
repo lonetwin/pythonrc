@@ -65,6 +65,51 @@ it up as a project so that I can accept pull requests, bug reports or
 suggestions in case somebody bothers to use it and contribute back.
 
 
+Known Issue
+===========
+
+The console is *not* `__main__`. The issue was first reported by @deeenes in the
+gist_ I used to maintain. In essence, this code fails::
+
+    >>> import timeit
+    >>>
+    >>> def getExecutionTime():
+    ...     t = timeit.Timer("sayHello()", "from __main__ import sayHello")
+    ...     return t.timeit(2)
+    ...
+    >>> def sayHello():
+    ...     print("Hello")
+    ...
+    >>> print(getExecutionTime())
+    Traceback (most recent call last):
+      File "<console>", line 1, in <module>
+      File "<console>", line 3, in getExecutionTime
+      File "/usr/lib64/python2.7/timeit.py", line 202, in timeit
+        timing = self.inner(it, self.timer)
+      File "<timeit-src>", line 3, in inner
+    ImportError: cannot import name sayHello
+    >>>
+
+  There are two possible workarounds for this:
+
+  * When within the console, if you have to reference local names via
+    `__main__`, remember to do it via `__main__.pymp.locals` instead, something
+    like (for the example above)::
+
+        ...
+        def getExecutionTime():
+            t = timeit.Timer("sayHello()", "from __main__ import pymp; sayHello = pymp.locals['sayHello']")
+        ...
+
+  * Or in the pythonrc file, change the initialization of `ImprovedConsole` to
+    accept `locals()`. That is something like this::
+
+        pymp = ImprovedConsole(locals=locals())
+
+    Although the downside of this is, doing it will pollute your console
+    namespace with everything in the pythonrc file.
+
+
 .. [1] Since python 3.4 the default interpreter also has tab completion enabled however it does not do pathname completion
 .. _ipython: https://ipython.org/
 .. _bpython: https://bpython-interpreter.org/
