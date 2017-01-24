@@ -254,17 +254,26 @@ class ImprovedConsole(InteractiveConsole, object):
         cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
             cmd = cmd.format(**self.locals)
-            try:
-                process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            except:
-                self.showtraceback()
+            if cmd.split()[0] == "cd":
+                try:
+                    args = cmd.split()
+                    if len(args) > 2:
+                        raise ValueError("Too many arguments passed to cd")
+                    os.chdir(os.path.expanduser(os.path.expandvars(args[1])))
+                except:
+                    self.showtraceback()
             else:
-                out, err = process.communicate()
-                rc = process.returncode
-                print ('{}'.format(red(err.decode('utf-8')
-                       if err else green(out.decode('utf-8'), bold=False))))
-                builtins._ = cmd_exec(out, err, rc)
-                del cmd_exec
+                try:
+                    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except:
+                    self.showtraceback()
+                else:
+                    out, err = process.communicate()
+                    rc = process.returncode
+                    print ('{}'.format(red(err.decode('utf-8')
+                                           if err else green(out.decode('utf-8'), bold=False))))
+                    builtins._ = cmd_exec(out, err, rc)
+                    del cmd_exec
         else:
             if os.environ.get('SSH_CONNECTION'):
                 # I use the bash function similar to the one below in my
