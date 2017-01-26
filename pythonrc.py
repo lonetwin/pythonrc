@@ -337,11 +337,16 @@ pymp = ImprovedConsole()
 banner="Welcome to the ImprovedConsole. Type in \h for list of features"
 
 # - fire it up !
-while True:
+retries=2
+while retries:
     try:
         pymp.interact(banner=banner)
+    except SystemExit:
+        # Fixes #2: exit when 'quit()' invoked
+        break
     except:
         import traceback
+        retries -= 1
         print(red("I'm sorry, ImprovedConsole could not handle that !\n"
                   "Please report an error with this traceback, I would really appreciate that !"))
         traceback.print_exc()
@@ -350,6 +355,7 @@ while True:
                   "If the crash occurs again, please exit the session"))
         banner=blue("Your crashed session has been restored")
     else:
+        # exit with a Ctrl-D
         break
 
 # Exit the Python shell on exiting the InteractiveConsole
