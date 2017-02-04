@@ -77,6 +77,7 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
+__version__ = "0.1"
 
 HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000
@@ -211,7 +212,7 @@ class ImprovedConsole(InteractiveConsole, object):
         elif line.startswith(self.SH_EXEC):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
         elif line.endswith(self.DOC_CMD):
-            line = line.strip(self.DOC_CMD + '.(')
+            line = line.rstrip(self.DOC_CMD + '.(')
             if not line:
                 line = 'dir()'
             elif keyword.iskeyword(line):
