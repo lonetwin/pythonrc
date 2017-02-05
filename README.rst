@@ -40,6 +40,7 @@ provides:
         + for objects, their attributes/methods
         + for strings with a ``/``, pathname completion
         + module name completion in an import statement
+* auto-indentation
 * shortcut to open your ``$EDITOR`` with the last executed command (the ``\e``
   command)
 * temporary escape to ``$SHELL`` or ability to execute a shell command and

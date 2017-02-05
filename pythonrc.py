@@ -37,6 +37,7 @@ This file create an InteractiveConsole instance, which provides:
         + for objects, their attributes/methods
         + for strings with a '/', pathname completion
     - without preceding text four spaces
+  * auto-indentation
   * shortcut to open your $EDITOR with the last executed command
     (the '\e' command)
   * temporary escape to $SHELL or ability to execute a shell command and
@@ -77,7 +78,7 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
-__version__ = "0.1"
+__version__ = "0.2"
 
 HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000
@@ -116,6 +117,7 @@ class ImprovedConsole(InteractiveConsole, object):
         self.session_history = [] # This holds the last executed statements
         self.buffer = []          # This holds the statement to be executed
         self.tab = tab
+        self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
         self._init_readline()
         self._init_prompt()
@@ -133,6 +135,9 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - turn on tab completion
         readline.parse_and_bind('tab: complete')
+
+        # - enable auto-indenting
+        readline.set_pre_input_hook(self.auto_indent_hook)
 
         # - other useful stuff
         readline.parse_and_bind('set skip-completed-text on')
@@ -200,6 +205,13 @@ class ImprovedConsole(InteractiveConsole, object):
                 return None
         return complete_wrapper
 
+    def auto_indent_hook(self):
+        """Hook called by readline between printing the prompt and
+        starting to read input.
+        """
+        readline.insert_text(self._indent)
+        readline.redisplay()
+
     def raw_input(self, *args):
         """Read the input and delegate if necessary.
         """
@@ -219,7 +231,29 @@ class ImprovedConsole(InteractiveConsole, object):
                 line = 'help("{}")'.format(line)
             else:
                 line = 'print({}.__doc__)'.format(line)
+        elif line.startswith(self.tab) or self._indent:
+            if line.strip():
+                # if non empty line with an indent, check if the indent
+                # level has been changed
+                leading_space = line[:line.index(line.lstrip()[0])]
+                if self._indent != leading_space:
+                    self._indent = leading_space
+            else:
+                self._indent = self._indent[:-len(self.tab)]
+                line = ''
         return line
+
+    def push(self, line):
+        """Wrapper around InteractiveConsole's push method for adding an
+        indent on start of a block.
+        """
+        more = super(ImprovedConsole, self).push(line)
+        if more:
+            if line.endswith(":"):
+                self._indent += self.tab
+        else:
+            self._indent = ''
+        return more
 
     def write(self, data):
         """Write out errors to stderr
@@ -227,6 +261,7 @@ class ImprovedConsole(InteractiveConsole, object):
         sys.stderr.write(red(data))
 
     def resetbuffer(self):
+        self._indent = ''
         self.session_history.extend(self.buffer)
         return super(ImprovedConsole, self).resetbuffer()
 
@@ -294,8 +329,9 @@ HELP = cyan("""\
         Welcome to lonetwin's pimped up python prompt
     ( available at https://gist.github.com/lonetwin/5902720 )
 
-You've got color, tab completion, pretty-printing, an editable input buffer
-(via the '\e' command) and shell command execution (via the '!' command).
+You've got color, tab completion, auto-indentation, pretty-printing, an
+editable input buffer (via the '\e' command) and shell command execution
+(via the '!' command).
 
 * A tab with preceding text will attempt auto-completion of keywords, name in
 the current namespace, attributes and methods. If the preceding text has a
@@ -334,8 +370,7 @@ object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
 
 # - create our pimped out console
 pymp = ImprovedConsole()
-
-banner="Welcome to the ImprovedConsole. Type in \h for list of features"
+banner = "Welcome to the ImprovedConsole. Type in \h for list of features"
 
 # - fire it up !
 retries=2
