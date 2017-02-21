@@ -80,7 +80,7 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
-__version__ = "0.2"
+__version__ = "0.3"
 
 HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000

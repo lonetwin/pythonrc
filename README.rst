@@ -46,7 +46,8 @@ provides:
 * temporary escape to ``$SHELL`` or ability to execute a shell command and
   capturing the output in to the ``_`` variable (the ``!`` command)
 * execution history
-* convenient printing of doc stings (the ``?`` command)
+* convenient printing of doc stings (the '?' command) and search for entries in
+  online docs (the '??' command)
 
 If you have any other good ideas please feel free to submit pull requests or
 issues.
