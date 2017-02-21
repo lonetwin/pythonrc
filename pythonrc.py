@@ -43,7 +43,8 @@ This file create an InteractiveConsole instance, which provides:
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the output in to the '_' variable (the '!' command)
   * execution history
-  * convenient printing of doc stings (the '?' command)
+  * convenient printing of doc stings (the '?' command) and search for
+    entries in online docs (the '??' command)
 
 Some ideas borrowed from:
   * http://eseth.org/2008/pimping-pythonrc.html
@@ -73,6 +74,7 @@ import rlcompleter
 import signal
 import subprocess
 import sys
+import webbrowser
 
 from code import InteractiveConsole
 from collections import namedtuple
@@ -110,6 +112,7 @@ class ImprovedConsole(InteractiveConsole, object):
     EDIT_CMD = '\e'
     SH_EXEC  = '!'
     DOC_CMD  = '?'
+    DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}"
     HELP_CMD = '\h'
     MODLIST  = frozenset(name for _, name, _ in pkgutil.iter_modules())
 
@@ -224,13 +227,19 @@ class ImprovedConsole(InteractiveConsole, object):
         elif line.startswith(self.SH_EXEC):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
         elif line.endswith(self.DOC_CMD):
-            line = line.rstrip(self.DOC_CMD + '.(')
-            if not line:
-                line = 'dir()'
-            elif keyword.iskeyword(line):
-                line = 'help("{}")'.format(line)
+            if line.endswith(self.DOC_CMD*2):
+                # search for line in online docs
+                line = line.rstrip(self.DOC_CMD*2 + '.(')
+                webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
+                line = ''
             else:
-                line = 'print({}.__doc__)'.format(line)
+                line = line.rstrip(self.DOC_CMD + '.(')
+                if not line:
+                    line = 'dir()'
+                elif keyword.iskeyword(line):
+                    line = 'help("{}")'.format(line)
+                else:
+                    line = 'print({}.__doc__)'.format(line)
         elif line.startswith(self.tab) or self._indent:
             if line.strip():
                 # if non empty line with an indent, check if the indent
@@ -330,8 +339,9 @@ HELP = cyan("""\
     ( available at https://gist.github.com/lonetwin/5902720 )
 
 You've got color, tab completion, auto-indentation, pretty-printing, an
-editable input buffer (via the '\e' command) and shell command execution
-(via the '!' command).
+editable input buffer (via the '\e' command), doc string printing (via
+the '?' command), online doc search (via the '??' command) and shell
+command execution (via the '!' command).
 
 * A tab with preceding text will attempt auto-completion of keywords, name in
 the current namespace, attributes and methods. If the preceding text has a
@@ -366,6 +376,9 @@ fg to get back.
 * Simply typing out a defined name followed by a '?' will print out the
 object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
 
+* Typing '??' after something will search for the term at
+  {ImprovedConsole.DOC_URL}
+  (eg: try webbrowser.open??)
 """.format(**globals()))
 
 # - create our pimped out console
