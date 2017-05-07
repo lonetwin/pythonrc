@@ -80,6 +80,15 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
+# Fix for Issue #1
+# - Exit if being called from within ipython
+try:
+    if get_ipython():
+        sys.exit(0)
+except NameError:
+    pass
+
+
 __version__ = "0.3"
 
 HISTFILE = os.path.expanduser("~/.python_history")
