@@ -229,7 +229,10 @@ class ImprovedConsole(InteractiveConsole, object):
         elif line.endswith(self.DOC_CMD):
             if line.endswith(self.DOC_CMD*2):
                 # search for line in online docs
-                line = line.rstrip(self.DOC_CMD*2 + '.(')
+                # - strip off the '??' and the possible tab-completed
+                # '(' or '.' and split the dotted name for better search
+                # query string
+                line = line.rstrip(self.DOC_CMD + '.(').replace('.', '+')
                 webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
                 line = ''
             else:
