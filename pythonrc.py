@@ -80,7 +80,7 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
-# Fix for Issue #1
+# Fix for Issue #5
 # - Exit if being called from within ipython
 try:
     if get_ipython():
