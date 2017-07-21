@@ -239,8 +239,8 @@ class ImprovedConsole(InteractiveConsole, object):
             if line.endswith(self.DOC_CMD*2):
                 # search for line in online docs
                 # - strip off the '??' and the possible tab-completed
-                # '(' or '.' and split the dotted name for better search
-                # query string
+                # '(' or '.' and replace '.' with '+' to create the
+                # query search string
                 line = line.rstrip(self.DOC_CMD + '.(').replace('.', '+')
                 webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
                 line = ''
