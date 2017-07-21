@@ -231,8 +231,8 @@ class ImprovedConsole(InteractiveConsole, object):
         if line == self.HELP_CMD:
             print(HELP)
             line = ''
-        elif line == self.EDIT_CMD:
-            line = self._process_edit_cmd()
+        elif line.startswith(self.EDIT_CMD):
+            line = self._process_edit_cmd(line.strip(self.EDIT_CMD))
         elif line.startswith(self.SH_EXEC):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
         elif line.endswith(self.DOC_CMD):
@@ -286,38 +286,50 @@ class ImprovedConsole(InteractiveConsole, object):
         self.session_history.extend(self.buffer)
         return super(ImprovedConsole, self).resetbuffer()
 
-    def _process_edit_cmd(self):
-        # - setup the edit buffer
-        fd, filename = mkstemp('.py')
+    def _exec_from_file(self, filename, session_history=False):
+        """ Read and execute statement from file.
 
-        # - make a list of all lines in session history, commenting any
-        #   non-blank lines.
-        lines = []
-        for line in self.session_history:
-            line = line.strip('\n')
-            if line:
-                lines.append('# {}'.format(line))
+        Also, delete file if requested file is a tempfile containing the
+        session_history.
+        """
+        with open(filename) as lines:
+            if session_history:
+                os.unlink(filename)
             else:
-                lines.append(line)
+                self.write(cyan('executing {} in current namespace\n'.format(filename)))
 
-        # - join list into a single string delimited by \n and write to a
-        #   temporary file.
-        lines = '\n'.join(lines)
-        os.write(fd, lines.encode('utf-8'))
-        os.close(fd)
+            for stmt in lines:
+                if session_history:
+                    self.write(cyan("... {}".format(stmt)))
+                line = stmt.strip('\n')
+                if not line.strip().startswith('#'):
+                    self.push(line)
+                    readline.add_history(line)
+
+    def _process_edit_cmd(self, arg=''):
+        if arg:
+            filename = arg.strip()
+        else:
+            # - make a list of all lines in session history, commenting
+            # any non-blank lines.
+            fd, filename = mkstemp('.py')
+            lines = []
+            for line in self.session_history:
+                line = line.strip('\n')
+                if line:
+                    lines.append('# {}'.format(line))
+                else:
+                    lines.append(line)
+
+            # - join list into a single string delimited by \n and write
+            # to a temporary file.
+            lines = '\n'.join(lines)
+            os.write(fd, lines.encode('utf-8'))
+            os.close(fd)
 
         # - shell out to the editor
         os.system('{} {}'.format(EDITOR, filename))
-
-        # - process commands
-        lines = open(filename)
-        os.unlink(filename)
-        for stmt in lines:
-            self.write(cyan("... {}".format(stmt)))
-            line = stmt.strip('\n')
-            if not line.strip().startswith('#'):
-                self.push(line)
-                readline.add_history(line)
+        self._exec_from_file(filename, session_history=(False if arg.strip() else True))
         return ''
 
     def _process_sh_cmd(self, cmd):
