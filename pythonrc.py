@@ -289,7 +289,20 @@ class ImprovedConsole(InteractiveConsole, object):
     def _process_edit_cmd(self):
         # - setup the edit buffer
         fd, filename = mkstemp('.py')
-        lines = '\n'.join('# {}'.format(line.strip('\n')) for line in self.session_history)
+
+        # - make a list of all lines in session history, commenting any
+        #   non-blank lines.
+        lines = []
+        for line in self.session_history:
+            line = line.strip('\n')
+            if line:
+                lines.append('# {}'.format(line))
+            else:
+                lines.append(line)
+
+        # - join list into a single string delimited by \n and write to a
+        #   temporary file.
+        lines = '\n'.join(lines)
         os.write(fd, lines.encode('utf-8'))
         os.close(fd)
 
