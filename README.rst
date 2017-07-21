@@ -32,7 +32,9 @@ Features
 The file creates an InteractiveConsole_ instance and executes it. This instance
 provides:
 
+* execution history
 * colored prompts and pretty printing
+* auto-indentation
 * intelligent tab completion [1]_
     - without preceding text four spaces
     - with preceding text
@@ -40,12 +42,12 @@ provides:
         + for objects, their attributes/methods
         + for strings with a ``/``, pathname completion
         + module name completion in an import statement
-* auto-indentation
-* shortcut to open your ``$EDITOR`` with the last executed command (the ``\e``
-  command)
+* edit the session or a file in your $EDITOR (the '\e' command)
+    - with arguments, opens the file in your $EDITOR and on close, executes its
+      contents in the current session
+    - without argument, open your $EDITOR with the last executed commands
 * temporary escape to ``$SHELL`` or ability to execute a shell command and
   capturing the output in to the ``_`` variable (the ``!`` command)
-* execution history
 * convenient printing of doc stings (the '?' command) and search for entries in
   online docs (the '??' command)
 

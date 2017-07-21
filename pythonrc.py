@@ -30,19 +30,21 @@ $PYTHONSTARTUP is in your environment and points to this file.
 You could also simply make this file executable and call it directly.
 
 This file create an InteractiveConsole instance, which provides:
+  * execution history
   * colored prompts and pretty printing
+  * auto-indentation
   * intelligent tab completion:¹
     - with preceding text
         + names in the current namespace
         + for objects, their attributes/methods
         + for strings with a '/', pathname completion
     - without preceding text four spaces
-  * auto-indentation
-  * shortcut to open your $EDITOR with the last executed command
-    (the '\e' command)
+  * edit the session or a file in your $EDITOR (the '\e' command)
+    - with arguments, opens the file in your $EDITOR and on close,
+      executes its contents in the current session
+    - without argument, open your $EDITOR with the last executed commands
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the output in to the '_' variable (the '!' command)
-  * execution history
   * convenient printing of doc stings (the '?' command) and search for
     entries in online docs (the '??' command)
 
@@ -52,10 +54,10 @@ Some ideas borrowed from:
      sharing great ?)
   * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
 
-If you have any other good ideas please feel free to leave a comment.
+If you have any other good ideas please feel free to submit issues/pull requests.
 
-¹ Since python 3.4 the default interpreter also has tab completion enabled
-however it does not do pathname completion
+¹ Since python 3.4 the default interpreter also has tab completion
+enabled however it does not do pathname completion
 """
 
 try:
@@ -80,16 +82,7 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
-# Fix for Issue #5
-# - Exit if being called from within ipython
-try:
-    if get_ipython():
-        sys.exit(0)
-except NameError:
-    pass
-
-
-__version__ = "0.3"
+__version__ = "0.4"
 
 HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000
