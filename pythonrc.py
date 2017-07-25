@@ -253,8 +253,9 @@ class ImprovedConsole(InteractiveConsole, object):
                 if self._indent != leading_space:
                     self._indent = leading_space
             else:
+                # - empty line, decrease indent
                 self._indent = self._indent[:-len(self.tab)]
-                line = ''
+                line = self._indent
         return line
 
     def push(self, line):
@@ -276,7 +277,13 @@ class ImprovedConsole(InteractiveConsole, object):
 
     def resetbuffer(self):
         self._indent = ''
-        self.session_history.extend(self.buffer)
+        previous = ''
+        for line in self.buffer:
+            # - replace multiple empty lines with one before writing to session history
+            stripped = line.strip()
+            if stripped or stripped != previous:
+                self.session_history.append(line)
+            previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
     def _exec_from_file(self, filename, session_history=False):
@@ -292,13 +299,19 @@ class ImprovedConsole(InteractiveConsole, object):
                 else:
                     self.write(cyan('executing {} in current namespace\n'.format(filename)))
 
+                previous = ''
                 for stmt in lines:
+                    # - skip over multiple empty lines
+                    stripped = stmt.strip()
+                    if stripped == '' and stripped == previous:
+                        continue
                     if session_history:
                         self.write(cyan("... {}".format(stmt)))
-                    line = stmt.strip('\n')
-                    if not line.strip().startswith('#'):
+                    if not stripped.startswith('#'):
+                        line = stmt.strip('\n')
                         self.push(line)
                         readline.add_history(line)
+                    previous = stripped
         except IOError as err:
             if session_history:
                 raise
