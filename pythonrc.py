@@ -232,7 +232,7 @@ class ImprovedConsole(InteractiveConsole, object):
             if line.endswith(self.DOC_CMD*2):
                 # search for line in online docs
                 # - strip off the '??' and the possible tab-completed
-                # '(' or '.' and replace '.' with '+' to create the
+                # '(' or '.' and replace inner '.' with '+' to create the
                 # query search string
                 line = line.rstrip(self.DOC_CMD + '.(').replace('.', '+')
                 webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
@@ -251,6 +251,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 # level has been changed
                 leading_space = line[:line.index(line.lstrip()[0])]
                 if self._indent != leading_space:
+                    # indent level changed, update self._indent
                     self._indent = leading_space
             else:
                 # - empty line, decrease indent
@@ -271,7 +272,7 @@ class ImprovedConsole(InteractiveConsole, object):
         return more
 
     def write(self, data):
-        """Write out errors to stderr
+        """Write out data to stderr
         """
         sys.stderr.write(red(data))
 
