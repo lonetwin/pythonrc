@@ -285,19 +285,24 @@ class ImprovedConsole(InteractiveConsole, object):
         Also, delete file if requested file is a tempfile containing the
         session_history.
         """
-        with open(filename) as lines:
-            if session_history:
-                os.unlink(filename)
-            else:
-                self.write(cyan('executing {} in current namespace\n'.format(filename)))
-
-            for stmt in lines:
+        try:
+            with open(filename) as lines:
                 if session_history:
-                    self.write(cyan("... {}".format(stmt)))
-                line = stmt.strip('\n')
-                if not line.strip().startswith('#'):
-                    self.push(line)
-                    readline.add_history(line)
+                    os.unlink(filename)
+                else:
+                    self.write(cyan('executing {} in current namespace\n'.format(filename)))
+
+                for stmt in lines:
+                    if session_history:
+                        self.write(cyan("... {}".format(stmt)))
+                    line = stmt.strip('\n')
+                    if not line.strip().startswith('#'):
+                        self.push(line)
+                        readline.add_history(line)
+        except IOError as err:
+            if session_history:
+                raise
+            self.showtraceback()
 
     def _process_edit_cmd(self, arg=''):
         if arg:
