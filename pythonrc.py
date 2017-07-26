@@ -170,15 +170,16 @@ class ImprovedConsole(InteractiveConsole, object):
             rows, cols = subprocess.check_output('stty size', shell=True).strip().split()
         except:
             cols = 80
+        keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
         def pprint_callback(value):
             if value is not None:
                 builtins._ = value
                 formatted = pprint.pformat(value, width=cols)
                 if issubclass(type(value), dict):
-                    formatted = re.sub(r'([ {][^{:]+?: )+?', lambda m: purple(m.group()), formatted)
+                    formatted = keys_re.sub(lambda m: purple(m.group()), formatted)
                     print(formatted)
                 else:
-                   print(blue(formatted))
+                    print(blue(formatted))
         sys.displayhook = pprint_callback
 
     def _improved_rlcompleter(self):
