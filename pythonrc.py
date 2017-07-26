@@ -87,7 +87,7 @@ __version__ = "0.4"
 HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000
 EDITOR   = os.environ.get('EDITOR', 'vi')
-SHELL    = os.environ.get('SHELL', '$SHELL')
+SHELL    = os.environ.get('SHELL', '/bin/sh')
 
 
 def create_color_func(code):
