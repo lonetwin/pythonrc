@@ -40,8 +40,7 @@ This file create an InteractiveConsole instance, which provides:
         + for strings with a '/', pathname completion
     - without preceding text four spaces
   * edit the session or a file in your $EDITOR (the '\e' command)
-    - with arguments, opens the file in your $EDITOR and on close,
-      executes its contents in the current session
+    - with arguments, opens the file in your $EDITOR
     - without argument, open your $EDITOR with the last executed commands
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the output in to the '_' variable (the '!' command)
@@ -288,61 +287,57 @@ class ImprovedConsole(InteractiveConsole, object):
             previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
-    def _exec_from_file(self, filename, session_history=False):
-        """ Read and execute statement from file.
-
-        Also, delete file if requested file is a tempfile containing the
-        session_history.
+    def _mktemp_history_buffer(self):
+        """Writes session_history to a temp file and returns the filename.
         """
-        try:
-            with open(filename) as lines:
-                if session_history:
-                    os.unlink(filename)
-                else:
-                    self.write(cyan('executing {} in current namespace\n'.format(filename)))
+        # - make a list of all lines in session history, commenting any
+        #   non-blank lines.
+        lines = []
+        for line in self.session_history:
+            line = line.strip('\n')
+            if line:
+                lines.append('# {}'.format(line))
+            else:
+                lines.append(line)
 
-                previous = ''
-                for stmt in lines:
-                    # - skip over multiple empty lines
-                    stripped = stmt.strip()
-                    if stripped == '' and stripped == previous:
-                        continue
-                    if session_history:
-                        self.write(cyan("... {}".format(stmt)))
-                    if not stripped.startswith('#'):
-                        line = stmt.strip('\n')
-                        self.push(line)
-                        readline.add_history(line)
-                    previous = stripped
-        except IOError as err:
-            if session_history:
-                raise
-            self.showtraceback()
+        # - join list into a single string delimited by \n and write to a
+        #   temporary file.
+        lines = '\n'.join(lines)
+
+        fd, filename = mkstemp('.py')
+        os.write(fd, lines.encode('utf-8'))
+        os.close(fd)
+        return filename
+
+    def _exec_from_file(self, filename):
+        previous = ''
+        for stmt in open(filename):
+            # - skip over multiple empty lines
+            stripped = stmt.strip()
+            if stripped == '' and stripped == previous:
+                continue
+            self.write(cyan("... {}".format(stmt)))
+            if not stripped.startswith('#'):
+                line = stmt.strip('\n')
+                self.push(line)
+                readline.add_history(line)
+            previous = stripped
 
     def _process_edit_cmd(self, arg=''):
-        if arg:
-            filename = arg.strip()
-        else:
-            # - make a list of all lines in session history, commenting
-            # any non-blank lines.
-            fd, filename = mkstemp('.py')
-            lines = []
-            for line in self.session_history:
-                line = line.strip('\n')
-                if line:
-                    lines.append('# {}'.format(line))
-                else:
-                    lines.append(line)
-
-            # - join list into a single string delimited by \n and write
-            # to a temporary file.
-            lines = '\n'.join(lines)
-            os.write(fd, lines.encode('utf-8'))
-            os.close(fd)
+        arg = arg.strip()
+        filename = arg if arg else self._mktemp_history_buffer()
 
         # - shell out to the editor
         os.system('{} {}'.format(EDITOR, filename))
-        self._exec_from_file(filename, session_history=(False if arg.strip() else True))
+
+        # - if arg was not provided (we edited session history), execute
+        # it in the current namespace
+        if not arg:
+            self._exec_from_file(filename)
+            os.unlink(filename)
+        else:
+            self.write(cyan('Use exec(open("{}").read(), globals(), locals()) to'
+                            ' execute this in current namespace\n'.format(filename)))
         return ''
 
     def _process_sh_cmd(self, cmd):

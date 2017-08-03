@@ -43,8 +43,7 @@ provides:
         + for strings with a ``/``, pathname completion
         + module name completion in an import statement
 * edit the session or a file in your $EDITOR (the '\e' command)
-    - with arguments, opens the file in your $EDITOR and on close, executes its
-      contents in the current session
+    - with arguments, opens the file in your $EDITOR
     - without argument, open your $EDITOR with the last executed commands
 * temporary escape to ``$SHELL`` or ability to execute a shell command and
   capturing the output in to the ``_`` variable (the ``!`` command)
