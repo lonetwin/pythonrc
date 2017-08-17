@@ -352,10 +352,6 @@ class ImprovedConsole(InteractiveConsole, object):
         if not arg:
             self._exec_from_file(filename)
             os.unlink(filename)
-        else:
-            self.writeline(cyan('Use exec(open("{}").read(), globals(), locals()) to'
-                                ' execute this in current namespace'.format(filename)))
-        return ''
 
     @_doc_to_usage
     def process_sh_cmd(self, cmd):
