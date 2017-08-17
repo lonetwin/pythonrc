@@ -65,6 +65,7 @@ except ImportError:
     import __builtin__ as builtins
 import atexit
 import glob
+import inspect
 import keyword
 import os
 import pkgutil
@@ -79,7 +80,7 @@ import webbrowser
 
 from code import InteractiveConsole
 from collections import namedtuple
-from tempfile import mkstemp
+from tempfile import NamedTemporaryFile
 
 __version__ = "0.4"
 
@@ -115,6 +116,7 @@ class ImprovedConsole(InteractiveConsole, object):
     DOC_CMD  = '?'
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}"
     HELP_CMD = '\h'
+    LIST_CMD = '\l'
     MODLIST  = frozenset(name for _, name, _ in pkgutil.iter_modules())
 
     def __init__(self, tab='    ', *args, **kwargs):
@@ -228,6 +230,8 @@ class ImprovedConsole(InteractiveConsole, object):
             line = self._process_edit_cmd(line.strip(self.EDIT_CMD))
         elif line.startswith(self.SH_EXEC):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
+        elif line.startswith(self.LIST_CMD):
+            line = self._process_list_cmd(line.strip(self.LIST_CMD))
         elif line.endswith(self.DOC_CMD):
             if line.endswith(self.DOC_CMD*2):
                 # search for line in online docs
@@ -287,27 +291,12 @@ class ImprovedConsole(InteractiveConsole, object):
             previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
-    def _mktemp_history_buffer(self):
-        """Writes session_history to a temp file and returns the filename.
+    def _mktemp_buffer(self, lines):
+        """Writes lines to a temp file and returns the filename.
         """
-        # - make a list of all lines in session history, commenting any
-        #   non-blank lines.
-        lines = []
-        for line in self.session_history:
-            line = line.strip('\n')
-            if line:
-                lines.append('# {}'.format(line))
-            else:
-                lines.append(line)
-
-        # - join list into a single string delimited by \n and write to a
-        #   temporary file.
-        lines = '\n'.join(lines)
-
-        fd, filename = mkstemp('.py')
-        os.write(fd, lines.encode('utf-8'))
-        os.close(fd)
-        return filename
+        with NamedTemporaryFile(suffix='.py', delete=False) as tempbuf:
+            tempbuf.writelines(lines)
+        return tempbuf.name
 
     def _exec_from_file(self, filename):
         previous = ''
@@ -325,7 +314,19 @@ class ImprovedConsole(InteractiveConsole, object):
 
     def _process_edit_cmd(self, arg=''):
         arg = arg.strip()
-        filename = arg if arg else self._mktemp_history_buffer()
+        if arg:
+            filename = arg
+        else:
+            # - make a list of all lines in session history, commenting
+            # any non-blank lines.
+            lines = []
+            for line in self.session_history:
+                line = line.strip('\n')
+                if line:
+                    lines.append('# {}'.format(line))
+                else:
+                    lines.append(line)
+            filename = self._mktemp_buffer(lines)
 
         # - shell out to the editor
         os.system('{} {}'.format(EDITOR, filename))
@@ -377,6 +378,23 @@ class ImprovedConsole(InteractiveConsole, object):
                 os.kill(os.getpid(), signal.SIGSTOP)
         return ''
 
+    def _process_list_cmd(self, arg):
+        try:
+            arg = arg.strip()
+            if not arg:
+                self.write('source list command requires an argument '
+                           '(eg: {} foo)\n'.format(self.LIST_CMD))
+                return ''
+            if arg not in self.locals or arg.split('.', 1)[0] not in locals:
+                raise NameError("name '{}' is not defined")
+            src_lines, _ = inspect.getsourcelines(eval(arg, {}, self.locals))
+        except (IOError, TypeError, NameError) as e:
+            self.write('{}\n'.format(e))
+        else:
+            for line_no, line in enumerate(src_lines):
+                self.write(cyan("... {}".format(line)))
+        return ''
+
 
 # Welcome message
 HELP = cyan("""\
@@ -395,9 +413,15 @@ will be inserted.
 
 * History will be saved in {HISTFILE} when you exit.
 
-* The '\e' command will open {EDITOR} with the history for the current
-session. On closing the editor any lines not starting with '#' will be
-executed.
+* The '\e' command without arguments will open {EDITOR} with the history
+for the current session. On closing the editor any lines not starting
+with '#' will be executed.
+
+* The '\e' command with an filename argument will open the filename in
+{EDITOR}.
+
+* The '\l' command with an argument will try to list the source code for
+the object provide as the argument.
 
 * The '!' command without anything following it will suspend this process, use
 fg to get back.

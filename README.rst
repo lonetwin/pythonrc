@@ -21,8 +21,8 @@ Demo
 Usage
 =====
 
-The ``pythonrc`` file will be executed when the Python interactive shell is
-started, if ``$PYTHONSTARTUP`` is in your environment and points to the file.
+The `pythonrc` file will be executed when the Python interactive shell is
+started, if `$PYTHONSTARTUP` is in your environment and points to the file.
 
 You could also simply make the file executable and call it directly.
 
@@ -40,15 +40,16 @@ provides:
     - with preceding text
         + names in the current namespace
         + for objects, their attributes/methods
-        + for strings with a ``/``, pathname completion
+        + for strings with a `/`, pathname completion
         + module name completion in an import statement
-* edit the session or a file in your $EDITOR (the '\e' command)
+* edit the session or a file in your `$EDITOR` (the `\e` command)
     - with arguments, opens the file in your $EDITOR
-    - without argument, open your $EDITOR with the last executed commands
-* temporary escape to ``$SHELL`` or ability to execute a shell command and
-  capturing the output in to the ``_`` variable (the ``!`` command)
-* convenient printing of doc stings (the '?' command) and search for entries in
-  online docs (the '??' command)
+    - without argument, open your `$EDITOR` with the last executed commands
+* list the source code of objects when available (the `\l` command)
+* temporary escape to `$SHELL` or ability to execute a shell command and
+  capturing the output in to the `_` variable (the `!` command)
+* convenient printing of doc stings (the `?` command) and search for entries in
+  online docs (the `??` command)
 
 If you have any other good ideas please feel free to submit pull requests or
 issues.
