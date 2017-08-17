@@ -264,7 +264,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 # - empty line, decrease indent
                 self._indent = self._indent[:-len(self.tab)]
                 line = self._indent
-        return line
+        return line or ''
 
     def push(self, line):
         """Wrapper around InteractiveConsole's push method for adding an
@@ -297,6 +297,15 @@ class ImprovedConsole(InteractiveConsole, object):
             previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
+    def _doc_to_usage(method):
+        def inner(self, arg):
+            arg = arg.strip()
+            if arg.startswith('-h') or arg.startswith('--help'):
+                return self.writeline(blue(method.__doc__.format(**config)))
+            else:
+                return method(self, arg)
+        return inner
+
     def _mktemp_buffer(self, lines):
         """Writes lines to a temp file and returns the filename.
         """
@@ -318,8 +327,9 @@ class ImprovedConsole(InteractiveConsole, object):
                 readline.add_history(line)
             previous = stripped
 
+    @_doc_to_usage
     def _process_edit_cmd(self, arg=''):
-        arg = arg.strip()
+        """{EDIT_CMD} [filename] - Open {EDITOR} with session history or provided filename"""
         if arg:
             filename = arg
         else:
@@ -347,7 +357,9 @@ class ImprovedConsole(InteractiveConsole, object):
                                 ' execute this in current namespace'.format(filename)))
         return ''
 
+    @_doc_to_usage
     def _process_sh_cmd(self, cmd):
+        """{SH_EXEC} [cmd] - Escape to {SHELL} or execute `cmd` in {SHELL}"""
         cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
             cmd = cmd.format(**self.locals)
@@ -382,11 +394,11 @@ class ImprovedConsole(InteractiveConsole, object):
                 os.system(config['SHELL'])
             else:
                 os.kill(os.getpid(), signal.SIGSTOP)
-        return ''
 
+    @_doc_to_usage
     def _process_list_cmd(self, arg):
+        """{LIST_CMD} <object> - List source code for object, if possible."""
         try:
-            arg = arg.strip()
             if not arg:
                 self.write('source list command requires an argument '
                            '(eg: {} foo)\n'.format(self.LIST_CMD))
@@ -397,7 +409,6 @@ class ImprovedConsole(InteractiveConsole, object):
         else:
             for line_no, line in enumerate(src_lines):
                 self.write(cyan("... {}".format(line)))
-        return ''
 
 
 # Welcome message
