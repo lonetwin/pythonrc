@@ -283,6 +283,9 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         sys.stderr.write(red(data))
 
+    def writeline(self, data):
+        return '{}\n'.format(data)
+
     def resetbuffer(self):
         self._indent = ''
         previous = ''
@@ -340,8 +343,8 @@ class ImprovedConsole(InteractiveConsole, object):
             self._exec_from_file(filename)
             os.unlink(filename)
         else:
-            self.write(cyan('Use exec(open("{}").read(), globals(), locals()) to'
-                            ' execute this in current namespace\n'.format(filename)))
+            self.writeline(cyan('Use exec(open("{}").read(), globals(), locals()) to'
+                                ' execute this in current namespace'.format(filename)))
         return ''
 
     def _process_sh_cmd(self, cmd):
@@ -390,7 +393,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 return ''
             src_lines, _ = inspect.getsourcelines(eval(arg, {}, self.locals))
         except (IOError, TypeError, NameError) as e:
-            self.write('{}\n'.format(e))
+            self.writeline(str(e))
         else:
             for line_no, line in enumerate(src_lines):
                 self.write(cyan("... {}".format(line)))
