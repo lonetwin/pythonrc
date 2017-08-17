@@ -385,8 +385,6 @@ class ImprovedConsole(InteractiveConsole, object):
                 self.write('source list command requires an argument '
                            '(eg: {} foo)\n'.format(self.LIST_CMD))
                 return ''
-            if arg not in self.locals or arg.split('.', 1)[0] not in locals:
-                raise NameError("name '{}' is not defined")
             src_lines, _ = inspect.getsourcelines(eval(arg, {}, self.locals))
         except (IOError, TypeError, NameError) as e:
             self.write('{}\n'.format(e))
