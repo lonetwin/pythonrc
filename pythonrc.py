@@ -125,11 +125,11 @@ class ImprovedConsole(InteractiveConsole, object):
         self.tab = tab
         self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
-        self._init_readline()
-        self._init_prompt()
-        self._init_pprint()
+        self.init_readline()
+        self.init_prompt()
+        self.init_pprint()
 
-    def _init_readline(self):
+    def init_readline(self):
         """Activates history and tab completion
         """
         # - init history
@@ -147,9 +147,9 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - other useful stuff
         readline.parse_and_bind('set skip-completed-text on')
-        readline.set_completer(self._improved_rlcompleter())
+        readline.set_completer(self.improved_rlcompleter())
 
-    def _init_prompt(self):
+    def init_prompt(self):
         """Activates color on the prompt based on python version.
 
         Also adds the hosts IP if running on a remote host over a
@@ -164,7 +164,7 @@ class ImprovedConsole(InteractiveConsole, object):
             sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
             sys.ps2 = red('[{}]... '.format(this_host), readline_workaround=True)
 
-    def _init_pprint(self):
+    def init_pprint(self):
         """Activates pretty-printing of output values.
         """
         try:
@@ -183,7 +183,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     print(blue(formatted))
         sys.displayhook = pprint_callback
 
-    def _improved_rlcompleter(self):
+    def improved_rlcompleter(self):
         """Enhances the default rlcompleter
 
         The function enhances the default rlcompleter by also doing
@@ -228,13 +228,13 @@ class ImprovedConsole(InteractiveConsole, object):
             print(HELP)
             line = ''
         elif line.startswith(config['EDIT_CMD']):
-            line = self._process_edit_cmd(line.strip(config['EDIT_CMD']))
+            line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
         elif line.startswith(config['SH_EXEC']):
-            line = self._process_sh_cmd(line.strip(config['SH_EXEC']))
+            line = self.process_sh_cmd(line.strip(config['SH_EXEC']))
         elif line.startswith(config['LIST_CMD']):
             # - strip off the possible tab-completed '('
             line = line.rstrip(config['LIST_CMD'] + '(')
-            line = self._process_list_cmd(line.strip(config['LIST_CMD']))
+            line = self.process_list_cmd(line.strip(config['LIST_CMD']))
         elif line.endswith(config['DOC_CMD']):
             if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
@@ -328,7 +328,7 @@ class ImprovedConsole(InteractiveConsole, object):
             previous = stripped
 
     @_doc_to_usage
-    def _process_edit_cmd(self, arg=''):
+    def process_edit_cmd(self, arg=''):
         """{EDIT_CMD} [filename] - Open {EDITOR} with session history or provided filename"""
         if arg:
             filename = arg
@@ -358,7 +358,7 @@ class ImprovedConsole(InteractiveConsole, object):
         return ''
 
     @_doc_to_usage
-    def _process_sh_cmd(self, cmd):
+    def process_sh_cmd(self, cmd):
         """{SH_EXEC} [cmd] - Escape to {SHELL} or execute `cmd` in {SHELL}"""
         cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
@@ -396,7 +396,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 os.kill(os.getpid(), signal.SIGSTOP)
 
     @_doc_to_usage
-    def _process_list_cmd(self, arg):
+    def process_list_cmd(self, arg):
         """{LIST_CMD} <object> - List source code for object, if possible."""
         try:
             if not arg:
