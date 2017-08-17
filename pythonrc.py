@@ -423,20 +423,20 @@ will be inserted.
 
 * History will be saved in {HISTFILE} when you exit.
 
-* The '\e' command without arguments will open {EDITOR} with the history
+* The '{EDIT_CMD}' command without arguments will open {EDITOR} with the history
 for the current session. On closing the editor any lines not starting
 with '#' will be executed.
 
-* The '\e' command with an filename argument will open the filename in
+* The '{EDIT_CMD}' command with an filename argument will open the filename in
 {EDITOR}.
 
-* The '\l' command with an argument will try to list the source code for
+* The '{LIST_CMD}' command with an argument will try to list the source code for
 the object provided as the argument.
 
-* The '!' command without anything following it will suspend this process, use
+* The '{SH_EXEC}' command without anything following it will suspend this process, use
 fg to get back.
 
-  - If the '!' command is followed by any text, the text will be executed in
+  - If the '{SH_EXEC}' command is followed by any text, the text will be executed in
   {SHELL} and the output/error will be displayed.
 
   - You may pass strings from the global namespace to the command line using
@@ -452,17 +452,17 @@ fg to get back.
   >>> _
   CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
 
-* Simply typing out a defined name followed by a '?' will print out the
+* Simply typing out a defined name followed by a '{DOC_CMD}' will print out the
 object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
 
-* Typing '??' after something will search for the term at
+* Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
   {DOC_URL}
   (eg: try webbrowser.open??)
 """.format(**config))
 
 # - create our pimped out console
 pymp = ImprovedConsole()
-banner = "Welcome to the ImprovedConsole. Type in \h for list of features"
+banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
 
 # - fire it up !
 retries=2
