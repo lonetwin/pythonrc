@@ -84,10 +84,18 @@ from tempfile import NamedTemporaryFile
 
 __version__ = "0.4"
 
-HISTFILE = os.path.expanduser("~/.python_history")
-HISTSIZE = 1000
-EDITOR   = os.environ.get('EDITOR', 'vi')
-SHELL    = os.environ.get('SHELL', '/bin/sh')
+config = dict(
+    HISTFILE = os.path.expanduser("~/.python_history"),
+    HISTSIZE = 1000,
+    EDITOR   = os.environ.get('EDITOR', 'vi'),
+    SHELL    = os.environ.get('SHELL', '/bin/bash'),
+    EDIT_CMD = '\e',
+    SH_EXEC  = '!',
+    DOC_CMD  = '?',
+    DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
+    HELP_CMD = '\h',
+    LIST_CMD = '\l',
+)
 
 
 def create_color_func(code):
@@ -111,14 +119,6 @@ cyan   = create_color_func(36)
 
 class ImprovedConsole(InteractiveConsole, object):
 
-    EDIT_CMD = '\e'
-    SH_EXEC  = '!'
-    DOC_CMD  = '?'
-    DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}"
-    HELP_CMD = '\h'
-    LIST_CMD = '\l'
-    MODLIST  = frozenset(name for _, name, _ in pkgutil.iter_modules())
-
     def __init__(self, tab='    ', *args, **kwargs):
         self.session_history = [] # This holds the last executed statements
         self.buffer = []          # This holds the statement to be executed
@@ -133,11 +133,11 @@ class ImprovedConsole(InteractiveConsole, object):
         """Activates history and tab completion
         """
         # - init history
-        if os.path.exists(HISTFILE):
-            readline.read_history_file(HISTFILE)
+        if os.path.exists(config['HISTFILE']):
+            readline.read_history_file(config['HISTFILE'])
 
-        readline.set_history_length(HISTSIZE)
-        atexit.register(lambda :readline.write_history_file(HISTFILE))
+        readline.set_history_length(config['HISTSIZE'])
+        atexit.register(lambda :readline.write_history_file(config['HISTFILE']))
 
         # - turn on tab completion
         readline.parse_and_bind('tab: complete')
@@ -194,13 +194,14 @@ class ImprovedConsole(InteractiveConsole, object):
         completer = rlcompleter.Completer(namespace=self.locals)
         # - remove / from the delimiters to help identify possibility for path completion
         readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
+        modlist = frozenset(name for _, name, _ in pkgutil.iter_modules())
         def complete_wrapper(text, state):
             line = readline.get_line_buffer().strip()
             if line == '':
                 return None if state > 0 else self.tab
             if state == 0:
                 if line.startswith('import') or line.startswith('from'):
-                    completer.matches = [ name for name in self.MODLIST if name.startswith(text) ]
+                    completer.matches = [name for name in modlist if name.startswith(text)]
                 else:
                     match = completer.complete(text, state)
                     if match is None and '/' in text:
@@ -223,26 +224,28 @@ class ImprovedConsole(InteractiveConsole, object):
         """Read the input and delegate if necessary.
         """
         line = InteractiveConsole.raw_input(self, *args)
-        if line == self.HELP_CMD:
+        if line == config['HELP_CMD']:
             print(HELP)
             line = ''
-        elif line.startswith(self.EDIT_CMD):
-            line = self._process_edit_cmd(line.strip(self.EDIT_CMD))
-        elif line.startswith(self.SH_EXEC):
-            line = self._process_sh_cmd(line.strip(self.SH_EXEC))
-        elif line.startswith(self.LIST_CMD):
-            line = self._process_list_cmd(line.strip(self.LIST_CMD))
-        elif line.endswith(self.DOC_CMD):
-            if line.endswith(self.DOC_CMD*2):
+        elif line.startswith(config['EDIT_CMD']):
+            line = self._process_edit_cmd(line.strip(config['EDIT_CMD']))
+        elif line.startswith(config['SH_EXEC']):
+            line = self._process_sh_cmd(line.strip(config['SH_EXEC']))
+        elif line.startswith(config['LIST_CMD']):
+            # - strip off the possible tab-completed '('
+            line = line.rstrip(config['LIST_CMD'] + '(')
+            line = self._process_list_cmd(line.strip(config['LIST_CMD']))
+        elif line.endswith(config['DOC_CMD']):
+            if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
                 # - strip off the '??' and the possible tab-completed
                 # '(' or '.' and replace inner '.' with '+' to create the
                 # query search string
-                line = line.rstrip(self.DOC_CMD + '.(').replace('.', '+')
-                webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
+                line = line.rstrip(config['DOC_CMD'] + '.(').replace('.', '+')
+                webbrowser.open(config['DOC_URL'].format(sys=sys, term=line))
                 line = ''
             else:
-                line = line.rstrip(self.DOC_CMD + '.(')
+                line = line.rstrip(config['DOC_CMD'] + '.(')
                 if not line:
                     line = 'dir()'
                 elif keyword.iskeyword(line):
@@ -329,7 +332,7 @@ class ImprovedConsole(InteractiveConsole, object):
             filename = self._mktemp_buffer(lines)
 
         # - shell out to the editor
-        os.system('{} {}'.format(EDITOR, filename))
+        os.system('{} {}'.format(config['EDITOR'], filename))
 
         # - if arg was not provided (we edited session history), execute
         # it in the current namespace
@@ -373,7 +376,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 #   function rpython { ssh -t $1 -- "python" }
                 # Unfortunately, suspending this ssh session, does not place me
                 # in a shell, so I need to create one:
-                os.system(os.environ.get('SHELL', '/bin/bash'))
+                os.system(config['SHELL'])
             else:
                 os.kill(os.getpid(), signal.SIGSTOP)
         return ''
@@ -419,7 +422,7 @@ with '#' will be executed.
 {EDITOR}.
 
 * The '\l' command with an argument will try to list the source code for
-the object provide as the argument.
+the object provided as the argument.
 
 * The '!' command without anything following it will suspend this process, use
 fg to get back.
@@ -444,9 +447,9 @@ fg to get back.
 object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
 
 * Typing '??' after something will search for the term at
-  {ImprovedConsole.DOC_URL}
+  {DOC_URL}
   (eg: try webbrowser.open??)
-""".format(**globals()))
+""".format(**config))
 
 # - create our pimped out console
 pymp = ImprovedConsole()
