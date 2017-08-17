@@ -30,19 +30,20 @@ $PYTHONSTARTUP is in your environment and points to this file.
 You could also simply make this file executable and call it directly.
 
 This file create an InteractiveConsole instance, which provides:
+  * execution history
   * colored prompts and pretty printing
+  * auto-indentation
   * intelligent tab completion:¹
     - with preceding text
         + names in the current namespace
         + for objects, their attributes/methods
         + for strings with a '/', pathname completion
     - without preceding text four spaces
-  * auto-indentation
-  * shortcut to open your $EDITOR with the last executed command
-    (the '\e' command)
+  * edit the session or a file in your $EDITOR (the '\e' command)
+    - with arguments, opens the file in your $EDITOR
+    - without argument, open your $EDITOR with the last executed commands
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the output in to the '_' variable (the '!' command)
-  * execution history
   * convenient printing of doc stings (the '?' command) and search for
     entries in online docs (the '??' command)
 
@@ -52,10 +53,10 @@ Some ideas borrowed from:
      sharing great ?)
   * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
 
-If you have any other good ideas please feel free to leave a comment.
+If you have any other good ideas please feel free to submit issues/pull requests.
 
-¹ Since python 3.4 the default interpreter also has tab completion enabled
-however it does not do pathname completion
+¹ Since python 3.4 the default interpreter also has tab completion
+enabled however it does not do pathname completion
 """
 
 try:
@@ -80,21 +81,12 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import mkstemp
 
-# Fix for Issue #5
-# - Exit if being called from within ipython
-try:
-    if get_ipython():
-        sys.exit(0)
-except NameError:
-    pass
-
-
-__version__ = "0.3"
+__version__ = "0.4"
 
 HISTFILE = os.path.expanduser("~/.python_history")
 HISTSIZE = 1000
 EDITOR   = os.environ.get('EDITOR', 'vi')
-SHELL    = os.environ.get('SHELL', '$SHELL')
+SHELL    = os.environ.get('SHELL', '/bin/sh')
 
 
 def create_color_func(code):
@@ -177,15 +169,16 @@ class ImprovedConsole(InteractiveConsole, object):
             rows, cols = subprocess.check_output('stty size', shell=True).strip().split()
         except:
             cols = 80
+        keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
         def pprint_callback(value):
             if value is not None:
                 builtins._ = value
                 formatted = pprint.pformat(value, width=cols)
                 if issubclass(type(value), dict):
-                    formatted = re.sub(r'([ {][^{:]+?: )+?', lambda m: purple(m.group()), formatted)
+                    formatted = keys_re.sub(lambda m: purple(m.group()), formatted)
                     print(formatted)
                 else:
-                   print(blue(formatted))
+                    print(blue(formatted))
         sys.displayhook = pprint_callback
 
     def _improved_rlcompleter(self):
@@ -231,16 +224,16 @@ class ImprovedConsole(InteractiveConsole, object):
         if line == self.HELP_CMD:
             print(HELP)
             line = ''
-        elif line == self.EDIT_CMD:
-            line = self._process_edit_cmd()
+        elif line.startswith(self.EDIT_CMD):
+            line = self._process_edit_cmd(line.strip(self.EDIT_CMD))
         elif line.startswith(self.SH_EXEC):
             line = self._process_sh_cmd(line.strip(self.SH_EXEC))
         elif line.endswith(self.DOC_CMD):
             if line.endswith(self.DOC_CMD*2):
                 # search for line in online docs
                 # - strip off the '??' and the possible tab-completed
-                # '(' or '.' and split the dotted name for better search
-                # query string
+                # '(' or '.' and replace inner '.' with '+' to create the
+                # query search string
                 line = line.rstrip(self.DOC_CMD + '.(').replace('.', '+')
                 webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
                 line = ''
@@ -258,10 +251,12 @@ class ImprovedConsole(InteractiveConsole, object):
                 # level has been changed
                 leading_space = line[:line.index(line.lstrip()[0])]
                 if self._indent != leading_space:
+                    # indent level changed, update self._indent
                     self._indent = leading_space
             else:
+                # - empty line, decrease indent
                 self._indent = self._indent[:-len(self.tab)]
-                line = ''
+                line = self._indent
         return line
 
     def push(self, line):
@@ -277,19 +272,24 @@ class ImprovedConsole(InteractiveConsole, object):
         return more
 
     def write(self, data):
-        """Write out errors to stderr
+        """Write out data to stderr
         """
         sys.stderr.write(red(data))
 
     def resetbuffer(self):
         self._indent = ''
-        self.session_history.extend(self.buffer)
+        previous = ''
+        for line in self.buffer:
+            # - replace multiple empty lines with one before writing to session history
+            stripped = line.strip()
+            if stripped or stripped != previous:
+                self.session_history.append(line)
+            previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
-    def _process_edit_cmd(self):
-        # - setup the edit buffer
-        fd, filename = mkstemp('.py')
-
+    def _mktemp_history_buffer(self):
+        """Writes session_history to a temp file and returns the filename.
+        """
         # - make a list of all lines in session history, commenting any
         #   non-blank lines.
         lines = []
@@ -303,21 +303,41 @@ class ImprovedConsole(InteractiveConsole, object):
         # - join list into a single string delimited by \n and write to a
         #   temporary file.
         lines = '\n'.join(lines)
+
+        fd, filename = mkstemp('.py')
         os.write(fd, lines.encode('utf-8'))
         os.close(fd)
+        return filename
+
+    def _exec_from_file(self, filename):
+        previous = ''
+        for stmt in open(filename):
+            # - skip over multiple empty lines
+            stripped = stmt.strip()
+            if stripped == '' and stripped == previous:
+                continue
+            self.write(cyan("... {}".format(stmt)))
+            if not stripped.startswith('#'):
+                line = stmt.strip('\n')
+                self.push(line)
+                readline.add_history(line)
+            previous = stripped
+
+    def _process_edit_cmd(self, arg=''):
+        arg = arg.strip()
+        filename = arg if arg else self._mktemp_history_buffer()
 
         # - shell out to the editor
         os.system('{} {}'.format(EDITOR, filename))
 
-        # - process commands
-        lines = open(filename)
-        os.unlink(filename)
-        for stmt in lines:
-            self.write(cyan("... {}".format(stmt)))
-            line = stmt.strip('\n')
-            if not line.strip().startswith('#'):
-                self.push(line)
-                readline.add_history(line)
+        # - if arg was not provided (we edited session history), execute
+        # it in the current namespace
+        if not arg:
+            self._exec_from_file(filename)
+            os.unlink(filename)
+        else:
+            self.write(cyan('Use exec(open("{}").read(), globals(), locals()) to'
+                            ' execute this in current namespace\n'.format(filename)))
         return ''
 
     def _process_sh_cmd(self, cmd):
