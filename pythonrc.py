@@ -284,7 +284,7 @@ class ImprovedConsole(InteractiveConsole, object):
         sys.stderr.write(red(data))
 
     def writeline(self, data):
-        return '{}\n'.format(data)
+        return self.write('{}\n'.format(data))
 
     def resetbuffer(self):
         self._indent = ''
@@ -400,12 +400,11 @@ class ImprovedConsole(InteractiveConsole, object):
         """{LIST_CMD} <object> - List source code for object, if possible."""
         try:
             if not arg:
-                self.write('source list command requires an argument '
-                           '(eg: {} foo)\n'.format(self.LIST_CMD))
-                return ''
+                self.writeline('source list command requires an argument '
+                               '(eg: {} foo)\n'.format(config['LIST_CMD']))
             src_lines, _ = inspect.getsourcelines(eval(arg, {}, self.locals))
         except (IOError, TypeError, NameError) as e:
-            self.writeline(str(e))
+            self.writeline(e)
         else:
             for line_no, line in enumerate(src_lines):
                 self.write(cyan("... {}".format(line)))
