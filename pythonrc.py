@@ -29,29 +29,17 @@ $PYTHONSTARTUP is in your environment and points to this file.
 
 You could also simply make this file executable and call it directly.
 
-This file create an InteractiveConsole instance, which provides:
+This file creates an InteractiveConsole instance, which provides:
   * execution history
   * colored prompts and pretty printing
   * auto-indentation
   * intelligent tab completion:¹
-    - with preceding text
-        + names in the current namespace
-        + for objects, their attributes/methods
-        + for strings with a '/', pathname completion
-    - without preceding text four spaces
-  * edit the session or a file in your $EDITOR (the '\e' command)
-    - with arguments, opens the file in your $EDITOR
-    - without argument, open your $EDITOR with the last executed commands
+  * source code listing for objects
+  * session history editing as well as opening source files for objects
+    or any files for that matter, using your $EDITOR
   * temporary escape to $SHELL or ability to execute a shell command and
-    capturing the output in to the '_' variable (the '!' command)
-  * convenient printing of doc stings (the '?' command) and search for
-    entries in online docs (the '??' command)
-
-Some ideas borrowed from:
-  * http://eseth.org/2008/pimping-pythonrc.html
-    (which co-incidentally reused something I wrote back in 2005 !! Ain't
-     sharing great ?)
-  * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
+    capturing the result into the '_' variable
+  * convenient printing of doc stings and search for entries in online docs
 
 If you have any other good ideas please feel free to submit issues/pull requests.
 
@@ -284,6 +272,8 @@ class ImprovedConsole(InteractiveConsole, object):
         sys.stderr.write(red(data))
 
     def writeline(self, data):
+        """Same as write but adds a newline to the end
+        """
         return self.write('{}\n'.format(data))
 
     def resetbuffer(self):
@@ -301,7 +291,7 @@ class ImprovedConsole(InteractiveConsole, object):
         def inner(self, arg):
             arg = arg.strip()
             if arg.startswith('-h') or arg.startswith('--help'):
-                return self.writeline(blue(method.__doc__.format(**config)))
+                return self.writeline(blue(method.__doc__.strip().format(**config)))
             else:
                 return method(self, arg)
         return inner
@@ -341,7 +331,21 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_edit_cmd(self, arg=''):
-        """{EDIT_CMD} [filename] - Open {EDITOR} with session history or provided filename"""
+        """
+        {EDIT_CMD} [object|filename] - Open {EDITOR} with session
+        history, provided filename or object's source file.
+
+        - without arguments, a temporary file containing session history is
+          created and opened in {EDITOR}. On quitting the editor, all
+          the non commented lines in the file are executed.
+
+        - with a filename argument, the file is opened in the editor. On
+          close, you are returned bay to the interpreter.
+
+        - with an object name argument, an attempt is made to lookup the
+          source file of the object and it is opened if found. Else the
+          argument is treated as a filename.
+        """
         if arg:
             obj = self.lookup(arg)
             filename = inspect.getsourcefile(obj) if obj else arg
@@ -368,7 +372,26 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_sh_cmd(self, cmd):
-        """{SH_EXEC} [cmd] - Escape to {SHELL} or execute `cmd` in {SHELL}"""
+        """
+        {SH_EXEC} [cmd [args ...] | {{fmt string}}] - Escape to {SHELL} or execute `cmd` in {SHELL}
+
+        - without arguments, the current interpreter will be suspended
+          and you will be dropped in a {SHELL} prompt. Use fg to return.
+
+        - with arguments, the text will be executed in {SHELL} and the
+          output/error will be displayed. Additionally '_' will contain
+          a named tuple with the (<stdout>, <stderror>, <return_code>)
+          for the execution of the command.
+
+          You may pass strings from the global namespace to the command
+          line using the `.format()` syntax. for example:
+
+        >>> filename = '/does/not/exist'
+        >>> !ls {{{{filename}}}}
+        ls: cannot access /does/not/exist: No such file or directory
+        >>> _
+        CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
+        """
         cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
             cmd = cmd.format(**self.locals)
@@ -406,7 +429,9 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_list_cmd(self, arg):
-        """{LIST_CMD} <object> - List source code for object, if possible."""
+        """
+        {LIST_CMD} <object> - List source code for object, if possible.
+        """
         try:
             if not arg:
                 self.writeline('source list command requires an argument '
@@ -420,57 +445,33 @@ class ImprovedConsole(InteractiveConsole, object):
 
 
 # Welcome message
-HELP = cyan("""\
-        Welcome to lonetwin's pimped up python prompt
-    ( available at https://gist.github.com/lonetwin/5902720 )
+HELP = cyan(
+"""Welcome to lonetwin's pimped up python prompt
 
-You've got color, tab completion, auto-indentation, pretty-printing, an
-editable input buffer (via the '\e' command), doc string printing (via
-the '?' command), online doc search (via the '??' command) and shell
-command execution (via the '!' command).
+You've got color, tab completion, auto-indentation, pretty-printing and more !
 
-* A tab with preceding text will attempt auto-completion of keywords, name in
-the current namespace, attributes and methods. If the preceding text has a
-'/' filename completion will be attempted. Without preceding text four spaces
-will be inserted.
+* A tab with preceding text will attempt auto-completion of keywords,
+  names in the current namespace, attributes and methods. If the preceding
+  text has a '/', filename completion will be attempted. Without preceding
+  text four spaces will be inserted.
 
 * History will be saved in {HISTFILE} when you exit.
 
-* The '{EDIT_CMD}' command without arguments will open {EDITOR} with the history
-for the current session. On closing the editor any lines not starting
-with '#' will be executed.
-
-* The '{EDIT_CMD}' command with an filename argument will open the filename in
-{EDITOR}.
-
-* The '{LIST_CMD}' command with an argument will try to list the source code for
-the object provided as the argument.
-
-* The '{SH_EXEC}' command without anything following it will suspend this process, use
-fg to get back.
-
-  - If the '{SH_EXEC}' command is followed by any text, the text will be executed in
-  {SHELL} and the output/error will be displayed.
-
-  - You may pass strings from the global namespace to the command line using
-  the `.format()` syntax assuming the globals are passed to format as kwargs.
-
-  - Additionally '_' will contain a named tuple representing the
-  (<stdout>, <stderror>, <return_code>) for the execution of the command.
-
-  for example:
-  >>> filename='/does/not/exist'
-  >>> !ls {{filename}}
-  ls: cannot access /does/not/exist: No such file or directory
-  >>> _
-  CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
-
-* Simply typing out a defined name followed by a '{DOC_CMD}' will print out the
-object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
+* Typing out a defined name followed by a '{DOC_CMD}' will print out the
+  object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
 
 * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
   {DOC_URL}
   (eg: try webbrowser.open??)
+
+* Open the your editor with current session history, source code of objects
+  or arbitrary files, using the '{EDIT_CMD}' command.
+
+* List source code for objects using the '{LIST_CMD}' command.
+
+* Execute shell commands using the '{SH_EXEC}' command.
+
+Try `<cmd> -h` for any of the commands to learn more.
 """.format(**config))
 
 # - create our pimped out console
