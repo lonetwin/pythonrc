@@ -11,8 +11,7 @@ shell experience.
 Unlike ipython_, bpython_ or any of the many other options out there, this is
 not designed to be used as a separate interactive environment. The intent is to
 keep it as a single file and use it as any other rcfile. This script relies
-solely on the standard python library and will always remain
-that way.
+solely on the standard python library and will always remain that way.
 
 Demo
 =====
@@ -43,16 +42,16 @@ provides:
         + for strings with a `/`, pathname completion
         + module name completion in an import statement
 * edit the session or a file in your `$EDITOR` (the `\e` command)
-    - with arguments, opens the file in your $EDITOR
-    - without argument, open your `$EDITOR` with the last executed commands
-* list the source code of objects when available (the `\l` command)
+    - without no arguments, opens your `$EDITOR` with the session history
+    - with filename argument, opens the file in your `$EDITOR`
+    - with object as an argument, opens the source code for the object in `$EDITOR`
+* list the source code for objects when available (the `\l` command)
 * temporary escape to `$SHELL` or ability to execute a shell command and
   capturing the output in to the `_` variable (the `!` command)
 * convenient printing of doc stings (the `?` command) and search for entries in
   online docs (the `??` command)
 
-If you have any other good ideas please feel free to submit pull requests or
-issues.
+If you have any other good ideas please feel free to submit pull requests or issues.
 
 
 A little history
