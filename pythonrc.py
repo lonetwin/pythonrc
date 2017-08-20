@@ -327,11 +327,24 @@ class ImprovedConsole(InteractiveConsole, object):
                 readline.add_history(line)
             previous = stripped
 
+    def lookup(self, name, namespace=None):
+        """Lookup the (dotted) object specified with the string `name`
+        in the specified namespace or in the current namespace if
+        unspecified.
+        """
+        components = name.split('.', 1)
+        if namespace is None:
+            obj = self.locals.get(components.pop(0))
+        else:
+            obj = getattr(namespace, components.pop(0), namespace)
+        return self.lookup(components[0], obj) if components else obj
+
     @_doc_to_usage
     def process_edit_cmd(self, arg=''):
         """{EDIT_CMD} [filename] - Open {EDITOR} with session history or provided filename"""
         if arg:
-            filename = arg
+            obj = self.lookup(arg)
+            filename = inspect.getsourcefile(obj) if obj else arg
         else:
             # - make a list of all lines in session history, commenting
             # any non-blank lines.
@@ -398,12 +411,12 @@ class ImprovedConsole(InteractiveConsole, object):
             if not arg:
                 self.writeline('source list command requires an argument '
                                '(eg: {} foo)\n'.format(config['LIST_CMD']))
-            src_lines, _ = inspect.getsourcelines(eval(arg, {}, self.locals))
+            src_lines, offset = inspect.getsourcelines(self.lookup(arg))
         except (IOError, TypeError, NameError) as e:
             self.writeline(e)
         else:
             for line_no, line in enumerate(src_lines):
-                self.write(cyan("... {}".format(line)))
+                self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
 
 
 # Welcome message
