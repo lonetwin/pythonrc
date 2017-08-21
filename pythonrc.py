@@ -29,29 +29,17 @@ $PYTHONSTARTUP is in your environment and points to this file.
 
 You could also simply make this file executable and call it directly.
 
-This file create an InteractiveConsole instance, which provides:
+This file creates an InteractiveConsole instance, which provides:
   * execution history
   * colored prompts and pretty printing
   * auto-indentation
   * intelligent tab completion:¹
-    - with preceding text
-        + names in the current namespace
-        + for objects, their attributes/methods
-        + for strings with a '/', pathname completion
-    - without preceding text four spaces
-  * edit the session or a file in your $EDITOR (the '\e' command)
-    - with arguments, opens the file in your $EDITOR
-    - without argument, open your $EDITOR with the last executed commands
+  * source code listing for objects
+  * session history editing as well as opening source files for objects
+    or any files for that matter, using your $EDITOR
   * temporary escape to $SHELL or ability to execute a shell command and
-    capturing the output in to the '_' variable (the '!' command)
-  * convenient printing of doc stings (the '?' command) and search for
-    entries in online docs (the '??' command)
-
-Some ideas borrowed from:
-  * http://eseth.org/2008/pimping-pythonrc.html
-    (which co-incidentally reused something I wrote back in 2005 !! Ain't
-     sharing great ?)
-  * http://igotgenes.blogspot.in/2009/01/tab-completion-and-history-in-python.html
+    capturing the result into the '_' variable
+  * convenient printing of doc stings and search for entries in online docs
 
 If you have any other good ideas please feel free to submit issues/pull requests.
 
@@ -65,6 +53,7 @@ except ImportError:
     import __builtin__ as builtins
 import atexit
 import glob
+import inspect
 import keyword
 import os
 import pkgutil
@@ -79,14 +68,22 @@ import webbrowser
 
 from code import InteractiveConsole
 from collections import namedtuple
-from tempfile import mkstemp
+from tempfile import NamedTemporaryFile
 
 __version__ = "0.4"
 
-HISTFILE = os.path.expanduser("~/.python_history")
-HISTSIZE = 1000
-EDITOR   = os.environ.get('EDITOR', 'vi')
-SHELL    = os.environ.get('SHELL', '/bin/sh')
+config = dict(
+    HISTFILE = os.path.expanduser("~/.python_history"),
+    HISTSIZE = 1000,
+    EDITOR   = os.environ.get('EDITOR', 'vi'),
+    SHELL    = os.environ.get('SHELL', '/bin/bash'),
+    EDIT_CMD = '\e',
+    SH_EXEC  = '!',
+    DOC_CMD  = '?',
+    DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
+    HELP_CMD = '\h',
+    LIST_CMD = '\l',
+)
 
 
 def create_color_func(code):
@@ -110,32 +107,25 @@ cyan   = create_color_func(36)
 
 class ImprovedConsole(InteractiveConsole, object):
 
-    EDIT_CMD = '\e'
-    SH_EXEC  = '!'
-    DOC_CMD  = '?'
-    DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}"
-    HELP_CMD = '\h'
-    MODLIST  = frozenset(name for _, name, _ in pkgutil.iter_modules())
-
     def __init__(self, tab='    ', *args, **kwargs):
         self.session_history = [] # This holds the last executed statements
         self.buffer = []          # This holds the statement to be executed
         self.tab = tab
         self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
-        self._init_readline()
-        self._init_prompt()
-        self._init_pprint()
+        self.init_readline()
+        self.init_prompt()
+        self.init_pprint()
 
-    def _init_readline(self):
+    def init_readline(self):
         """Activates history and tab completion
         """
         # - init history
-        if os.path.exists(HISTFILE):
-            readline.read_history_file(HISTFILE)
+        if os.path.exists(config['HISTFILE']):
+            readline.read_history_file(config['HISTFILE'])
 
-        readline.set_history_length(HISTSIZE)
-        atexit.register(lambda :readline.write_history_file(HISTFILE))
+        readline.set_history_length(config['HISTSIZE'])
+        atexit.register(lambda :readline.write_history_file(config['HISTFILE']))
 
         # - turn on tab completion
         readline.parse_and_bind('tab: complete')
@@ -145,9 +135,9 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - other useful stuff
         readline.parse_and_bind('set skip-completed-text on')
-        readline.set_completer(self._improved_rlcompleter())
+        readline.set_completer(self.improved_rlcompleter())
 
-    def _init_prompt(self):
+    def init_prompt(self):
         """Activates color on the prompt based on python version.
 
         Also adds the hosts IP if running on a remote host over a
@@ -162,7 +152,7 @@ class ImprovedConsole(InteractiveConsole, object):
             sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
             sys.ps2 = red('[{}]... '.format(this_host), readline_workaround=True)
 
-    def _init_pprint(self):
+    def init_pprint(self):
         """Activates pretty-printing of output values.
         """
         try:
@@ -181,7 +171,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     print(blue(formatted))
         sys.displayhook = pprint_callback
 
-    def _improved_rlcompleter(self):
+    def improved_rlcompleter(self):
         """Enhances the default rlcompleter
 
         The function enhances the default rlcompleter by also doing
@@ -192,13 +182,14 @@ class ImprovedConsole(InteractiveConsole, object):
         completer = rlcompleter.Completer(namespace=self.locals)
         # - remove / from the delimiters to help identify possibility for path completion
         readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
+        modlist = frozenset(name for _, name, _ in pkgutil.iter_modules())
         def complete_wrapper(text, state):
             line = readline.get_line_buffer().strip()
             if line == '':
                 return None if state > 0 else self.tab
             if state == 0:
                 if line.startswith('import') or line.startswith('from'):
-                    completer.matches = [ name for name in self.MODLIST if name.startswith(text) ]
+                    completer.matches = [name for name in modlist if name.startswith(text)]
                 else:
                     match = completer.complete(text, state)
                     if match is None and '/' in text:
@@ -221,24 +212,28 @@ class ImprovedConsole(InteractiveConsole, object):
         """Read the input and delegate if necessary.
         """
         line = InteractiveConsole.raw_input(self, *args)
-        if line == self.HELP_CMD:
+        if line == config['HELP_CMD']:
             print(HELP)
             line = ''
-        elif line.startswith(self.EDIT_CMD):
-            line = self._process_edit_cmd(line.strip(self.EDIT_CMD))
-        elif line.startswith(self.SH_EXEC):
-            line = self._process_sh_cmd(line.strip(self.SH_EXEC))
-        elif line.endswith(self.DOC_CMD):
-            if line.endswith(self.DOC_CMD*2):
+        elif line.startswith(config['EDIT_CMD']):
+            line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
+        elif line.startswith(config['SH_EXEC']):
+            line = self.process_sh_cmd(line.strip(config['SH_EXEC']))
+        elif line.startswith(config['LIST_CMD']):
+            # - strip off the possible tab-completed '('
+            line = line.rstrip(config['LIST_CMD'] + '(')
+            line = self.process_list_cmd(line.strip(config['LIST_CMD']))
+        elif line.endswith(config['DOC_CMD']):
+            if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
                 # - strip off the '??' and the possible tab-completed
                 # '(' or '.' and replace inner '.' with '+' to create the
                 # query search string
-                line = line.rstrip(self.DOC_CMD + '.(').replace('.', '+')
-                webbrowser.open(self.DOC_URL.format(sys=sys, term=line))
+                line = line.rstrip(config['DOC_CMD'] + '.(').replace('.', '+')
+                webbrowser.open(config['DOC_URL'].format(sys=sys, term=line))
                 line = ''
             else:
-                line = line.rstrip(self.DOC_CMD + '.(')
+                line = line.rstrip(config['DOC_CMD'] + '.(')
                 if not line:
                     line = 'dir()'
                 elif keyword.iskeyword(line):
@@ -257,7 +252,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 # - empty line, decrease indent
                 self._indent = self._indent[:-len(self.tab)]
                 line = self._indent
-        return line
+        return line or ''
 
     def push(self, line):
         """Wrapper around InteractiveConsole's push method for adding an
@@ -276,6 +271,11 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         sys.stderr.write(red(data))
 
+    def writeline(self, data):
+        """Same as write but adds a newline to the end
+        """
+        return self.write('{}\n'.format(data))
+
     def resetbuffer(self):
         self._indent = ''
         previous = ''
@@ -287,27 +287,21 @@ class ImprovedConsole(InteractiveConsole, object):
             previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
-    def _mktemp_history_buffer(self):
-        """Writes session_history to a temp file and returns the filename.
-        """
-        # - make a list of all lines in session history, commenting any
-        #   non-blank lines.
-        lines = []
-        for line in self.session_history:
-            line = line.strip('\n')
-            if line:
-                lines.append('# {}'.format(line))
+    def _doc_to_usage(method):
+        def inner(self, arg):
+            arg = arg.strip()
+            if arg.startswith('-h') or arg.startswith('--help'):
+                return self.writeline(blue(method.__doc__.strip().format(**config)))
             else:
-                lines.append(line)
+                return method(self, arg)
+        return inner
 
-        # - join list into a single string delimited by \n and write to a
-        #   temporary file.
-        lines = '\n'.join(lines)
-
-        fd, filename = mkstemp('.py')
-        os.write(fd, lines.encode('utf-8'))
-        os.close(fd)
-        return filename
+    def _mktemp_buffer(self, lines):
+        """Writes lines to a temp file and returns the filename.
+        """
+        with NamedTemporaryFile(suffix='.py', delete=False) as tempbuf:
+            tempbuf.writelines(lines)
+        return tempbuf.name
 
     def _exec_from_file(self, filename):
         previous = ''
@@ -323,24 +317,81 @@ class ImprovedConsole(InteractiveConsole, object):
                 readline.add_history(line)
             previous = stripped
 
-    def _process_edit_cmd(self, arg=''):
-        arg = arg.strip()
-        filename = arg if arg else self._mktemp_history_buffer()
+    def lookup(self, name, namespace=None):
+        """Lookup the (dotted) object specified with the string `name`
+        in the specified namespace or in the current namespace if
+        unspecified.
+        """
+        components = name.split('.', 1)
+        if namespace is None:
+            obj = self.locals.get(components.pop(0))
+        else:
+            obj = getattr(namespace, components.pop(0), namespace)
+        return self.lookup(components[0], obj) if components else obj
+
+    @_doc_to_usage
+    def process_edit_cmd(self, arg=''):
+        """
+        {EDIT_CMD} [object|filename] - Open {EDITOR} with session
+        history, provided filename or object's source file.
+
+        - without arguments, a temporary file containing session history is
+          created and opened in {EDITOR}. On quitting the editor, all
+          the non commented lines in the file are executed.
+
+        - with a filename argument, the file is opened in the editor. On
+          close, you are returned bay to the interpreter.
+
+        - with an object name argument, an attempt is made to lookup the
+          source file of the object and it is opened if found. Else the
+          argument is treated as a filename.
+        """
+        if arg:
+            obj = self.lookup(arg)
+            filename = inspect.getsourcefile(obj) if obj else arg
+        else:
+            # - make a list of all lines in session history, commenting
+            # any non-blank lines.
+            lines = []
+            for line in self.session_history:
+                line = line.strip('\n')
+                if line:
+                    lines.append('# {}'.format(line))
+                else:
+                    lines.append(line)
+            filename = self._mktemp_buffer(lines)
 
         # - shell out to the editor
-        os.system('{} {}'.format(EDITOR, filename))
+        os.system('{} {}'.format(config['EDITOR'], filename))
 
         # - if arg was not provided (we edited session history), execute
         # it in the current namespace
         if not arg:
             self._exec_from_file(filename)
             os.unlink(filename)
-        else:
-            self.write(cyan('Use exec(open("{}").read(), globals(), locals()) to'
-                            ' execute this in current namespace\n'.format(filename)))
-        return ''
 
-    def _process_sh_cmd(self, cmd):
+    @_doc_to_usage
+    def process_sh_cmd(self, cmd):
+        """
+        {SH_EXEC} [cmd [args ...] | {{fmt string}}] - Escape to {SHELL} or execute `cmd` in {SHELL}
+
+        - without arguments, the current interpreter will be suspended
+          and you will be dropped in a {SHELL} prompt. Use fg to return.
+
+        - with arguments, the text will be executed in {SHELL} and the
+          output/error will be displayed. Additionally '_' will contain
+          a named tuple with the (<stdout>, <stderror>, <return_code>)
+          for the execution of the command.
+
+          You may pass strings from the global namespace to the command
+          line using the `.format()` syntax. for example:
+
+        >>> filename = '/does/not/exist'
+        >>> !ls {{{{filename}}}}
+        ls: cannot access /does/not/exist: No such file or directory
+        >>> _
+        CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
+        """
         cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
             cmd = cmd.format(**self.locals)
@@ -372,63 +423,60 @@ class ImprovedConsole(InteractiveConsole, object):
                 #   function rpython { ssh -t $1 -- "python" }
                 # Unfortunately, suspending this ssh session, does not place me
                 # in a shell, so I need to create one:
-                os.system(os.environ.get('SHELL', '/bin/bash'))
+                os.system(config['SHELL'])
             else:
                 os.kill(os.getpid(), signal.SIGSTOP)
-        return ''
+
+    @_doc_to_usage
+    def process_list_cmd(self, arg):
+        """
+        {LIST_CMD} <object> - List source code for object, if possible.
+        """
+        try:
+            if not arg:
+                self.writeline('source list command requires an argument '
+                               '(eg: {} foo)\n'.format(config['LIST_CMD']))
+            src_lines, offset = inspect.getsourcelines(self.lookup(arg))
+        except (IOError, TypeError, NameError) as e:
+            self.writeline(e)
+        else:
+            for line_no, line in enumerate(src_lines):
+                self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
 
 
 # Welcome message
-HELP = cyan("""\
-        Welcome to lonetwin's pimped up python prompt
-    ( available at https://gist.github.com/lonetwin/5902720 )
+HELP = cyan(
+"""Welcome to lonetwin's pimped up python prompt
 
-You've got color, tab completion, auto-indentation, pretty-printing, an
-editable input buffer (via the '\e' command), doc string printing (via
-the '?' command), online doc search (via the '??' command) and shell
-command execution (via the '!' command).
+You've got color, tab completion, auto-indentation, pretty-printing and more !
 
-* A tab with preceding text will attempt auto-completion of keywords, name in
-the current namespace, attributes and methods. If the preceding text has a
-'/' filename completion will be attempted. Without preceding text four spaces
-will be inserted.
+* A tab with preceding text will attempt auto-completion of keywords,
+  names in the current namespace, attributes and methods. If the preceding
+  text has a '/', filename completion will be attempted. Without preceding
+  text four spaces will be inserted.
 
 * History will be saved in {HISTFILE} when you exit.
 
-* The '\e' command will open {EDITOR} with the history for the current
-session. On closing the editor any lines not starting with '#' will be
-executed.
+* Typing out a defined name followed by a '{DOC_CMD}' will print out the
+  object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
 
-* The '!' command without anything following it will suspend this process, use
-fg to get back.
-
-  - If the '!' command is followed by any text, the text will be executed in
-  {SHELL} and the output/error will be displayed.
-
-  - You may pass strings from the global namespace to the command line using
-  the `.format()` syntax assuming the globals are passed to format as kwargs.
-
-  - Additionally '_' will contain a named tuple representing the
-  (<stdout>, <stderror>, <return_code>) for the execution of the command.
-
-  for example:
-  >>> filename='/does/not/exist'
-  >>> !ls {{filename}}
-  ls: cannot access /does/not/exist: No such file or directory
-  >>> _
-  CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
-
-* Simply typing out a defined name followed by a '?' will print out the
-object's __doc__ attribute if one exists. (eg: []? /  str? / os.getcwd? )
-
-* Typing '??' after something will search for the term at
-  {ImprovedConsole.DOC_URL}
+* Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
+  {DOC_URL}
   (eg: try webbrowser.open??)
-""".format(**globals()))
+
+* Open the your editor with current session history, source code of objects
+  or arbitrary files, using the '{EDIT_CMD}' command.
+
+* List source code for objects using the '{LIST_CMD}' command.
+
+* Execute shell commands using the '{SH_EXEC}' command.
+
+Try `<cmd> -h` for any of the commands to learn more.
+""".format(**config))
 
 # - create our pimped out console
 pymp = ImprovedConsole()
-banner = "Welcome to the ImprovedConsole. Type in \h for list of features"
+banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
 
 # - fire it up !
 retries=2
