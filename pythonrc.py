@@ -300,7 +300,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """Writes lines to a temp file and returns the filename.
         """
         with NamedTemporaryFile(suffix='.py', delete=False) as tempbuf:
-            tempbuf.writelines(lines)
+            tempbuf.writelines('{}\n'.format(line) for line in lines)
         return tempbuf.name
 
     def _exec_from_file(self, filename):
