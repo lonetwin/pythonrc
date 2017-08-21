@@ -70,7 +70,7 @@ from code import InteractiveConsole
 from collections import namedtuple
 from tempfile import NamedTemporaryFile
 
-__version__ = "0.4"
+__version__ = "0.5"
 
 config = dict(
     HISTFILE = os.path.expanduser("~/.python_history"),
