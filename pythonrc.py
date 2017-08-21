@@ -68,6 +68,7 @@ import webbrowser
 
 from code import InteractiveConsole
 from collections import namedtuple
+from functools import partial
 from tempfile import NamedTemporaryFile
 
 __version__ = "0.5"
@@ -125,7 +126,7 @@ class ImprovedConsole(InteractiveConsole, object):
             readline.read_history_file(config['HISTFILE'])
 
         readline.set_history_length(config['HISTSIZE'])
-        atexit.register(lambda :readline.write_history_file(config['HISTFILE']))
+        atexit.register(partial(readline.write_history_file, config['HISTFILE']))
 
         # - turn on tab completion
         readline.parse_and_bind('tab: complete')
