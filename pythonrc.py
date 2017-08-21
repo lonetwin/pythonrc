@@ -25,9 +25,8 @@
 """pymp - lonetwin's pimped-up pythonrc
 
 This file will be executed when the Python interactive shell is started, if
-$PYTHONSTARTUP is in your environment and points to this file.
-
-You could also simply make this file executable and call it directly.
+$PYTHONSTARTUP is in your environment and points to this file. You could
+also make this file executable and call it directly.
 
 This file creates an InteractiveConsole instance, which provides:
   * execution history
@@ -35,8 +34,8 @@ This file creates an InteractiveConsole instance, which provides:
   * auto-indentation
   * intelligent tab completion:¹
   * source code listing for objects
-  * session history editing as well as opening source files for objects
-    or any files for that matter, using your $EDITOR
+  * session history editing using your $EDITOR, as well as editing of
+    source files for objects or regular files
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the result into the '_' variable
   * convenient printing of doc stings and search for entries in online docs
@@ -109,8 +108,8 @@ cyan   = create_color_func(36)
 class ImprovedConsole(InteractiveConsole, object):
 
     def __init__(self, tab='    ', *args, **kwargs):
-        self.session_history = [] # This holds the last executed statements
-        self.buffer = []          # This holds the statement to be executed
+        self.session_history = []  # This holds the last executed statements
+        self.buffer = []           # This holds the statement to be executed
         self.tab = tab
         self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
@@ -161,6 +160,7 @@ class ImprovedConsole(InteractiveConsole, object):
         except:
             cols = 80
         keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
+
         def pprint_callback(value):
             if value is not None:
                 builtins._ = value
@@ -184,6 +184,7 @@ class ImprovedConsole(InteractiveConsole, object):
         # - remove / from the delimiters to help identify possibility for path completion
         readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
         modlist = frozenset(name for _, name, _ in pkgutil.iter_modules())
+
         def complete_wrapper(text, state):
             line = readline.get_line_buffer().strip()
             if line == '':
@@ -446,8 +447,7 @@ class ImprovedConsole(InteractiveConsole, object):
 
 
 # Welcome message
-HELP = cyan(
-"""Welcome to lonetwin's pimped up python prompt
+HELP = cyan("""Welcome to lonetwin's pimped up python prompt
 
 You've got color, tab completion, auto-indentation, pretty-printing and more !
 
@@ -480,7 +480,7 @@ pymp = ImprovedConsole()
 banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
 
 # - fire it up !
-retries=2
+retries = 2
 while retries:
     try:
         pymp.interact(banner=banner)
@@ -496,7 +496,7 @@ while retries:
 
         print(red("I shall try to restore the crashed session.\n"
                   "If the crash occurs again, please exit the session"))
-        banner=blue("Your crashed session has been restored")
+        banner = blue("Your crashed session has been restored")
     else:
         # exit with a Ctrl-D
         break
