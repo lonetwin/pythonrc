@@ -301,8 +301,8 @@ class ImprovedConsole(InteractiveConsole, object):
     def _mktemp_buffer(self, lines):
         """Writes lines to a temp file and returns the filename.
         """
-        with NamedTemporaryFile(suffix='.py', delete=False) as tempbuf:
-            tempbuf.writelines('{}\n'.format(line) for line in lines)
+        with NamedTemporaryFile(mode='w+', suffix='.py', delete=False) as tempbuf:
+            tempbuf.write('\n'.join(lines))
         return tempbuf.name
 
     def _exec_from_file(self, filename):
@@ -354,14 +354,8 @@ class ImprovedConsole(InteractiveConsole, object):
         else:
             # - make a list of all lines in session history, commenting
             # any non-blank lines.
-            lines = []
-            for line in self.session_history:
-                line = line.strip('\n')
-                if line:
-                    lines.append('# {}'.format(line))
-                else:
-                    lines.append(line)
-            filename = self._mktemp_buffer(lines)
+            filename = self._mktemp_buffer("# {}".format(line) if line else ''
+                                           for line in (line.strip('\n') for line in self.session_history))
 
         # - shell out to the editor
         os.system('{} {}'.format(config['EDITOR'], filename))
