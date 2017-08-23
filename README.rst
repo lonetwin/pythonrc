@@ -119,5 +119,5 @@ There are two possible workarounds for this:
 .. _InteractiveConsole: https://docs.python.org/3.6/library/code.html#code.InteractiveConsole
 .. _2005: http://code.activestate.com/recipes/438813/
 .. _gist: https://gist.github.com/lonetwin/5902720
-.. |demo| image:: https://asciinema.org/a/100447.png
-          :target: https://asciinema.org/a/100447?speed=2
+.. |demo| image:: https://asciinema.org/a/134711.png
+          :target: https://asciinema.org/a/134711?speed=2
