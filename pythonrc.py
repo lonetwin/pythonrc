@@ -75,8 +75,8 @@ __version__ = "0.5"
 config = dict(
     HISTFILE = os.path.expanduser("~/.python_history"),
     HISTSIZE = 1000,
-    EDITOR   = os.environ.get('EDITOR', 'vi'),
-    SHELL    = os.environ.get('SHELL', '/bin/bash'),
+    EDITOR   = os.getenv('EDITOR', 'vi'),
+    SHELL    = os.getenv('SHELL', '/bin/bash'),
     EDIT_CMD = '\e',
     SH_EXEC  = '!',
     DOC_CMD  = '?',
@@ -147,8 +147,8 @@ class ImprovedConsole(InteractiveConsole, object):
         sys.ps1 = prompt_color('>>> ', readline_workaround=True)
         sys.ps2 = red('... ', readline_workaround=True)
         # - if we are over a remote connection, modify the ps1
-        if os.environ.get('SSH_CONNECTION'):
-            this_host = os.environ['SSH_CONNECTION'].split()[-2]
+        if os.getenv('SSH_CONNECTION'):
+            _, _, this_host, _ = os.getenv('SSH_CONNECTION').split()
             sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
             sys.ps2 = red('[{}]... '.format(this_host), readline_workaround=True)
 
@@ -333,9 +333,10 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_edit_cmd(self, arg=''):
-        """
-        {EDIT_CMD} [object|filename] - Open {EDITOR} with session
-        history, provided filename or object's source file.
+        """{EDIT_CMD} [object|filename]
+
+        Open {EDITOR} with session history, provided filename or
+        object's source file.
 
         - without arguments, a temporary file containing session history is
           created and opened in {EDITOR}. On quitting the editor, all
@@ -368,8 +369,9 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_sh_cmd(self, cmd):
-        """
-        {SH_EXEC} [cmd [args ...] | {{fmt string}}] - Escape to {SHELL} or execute `cmd` in {SHELL}
+        """{SH_EXEC} [cmd [args ...] | {{fmt string}}]
+
+        Escape to {SHELL} or execute `cmd` in {SHELL}
 
         - without arguments, the current interpreter will be suspended
           and you will be dropped in a {SHELL} prompt. Use fg to return.
@@ -412,7 +414,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     builtins._ = cmd_exec(out, err, rc)
                     del cmd_exec
         else:
-            if os.environ.get('SSH_CONNECTION'):
+            if os.getenv('SSH_CONNECTION'):
                 # I use the bash function similar to the one below in my
                 # .bashrc to directly open a python prompt on remote
                 # systems I log on to.
