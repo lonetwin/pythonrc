@@ -74,7 +74,7 @@ __version__ = "0.5"
 
 config = dict(
     HISTFILE = os.path.expanduser("~/.python_history"),
-    HISTSIZE = 1000,
+    HISTSIZE = -1,
     EDITOR   = os.getenv('EDITOR', 'vi'),
     SHELL    = os.getenv('SHELL', '/bin/bash'),
     EDIT_CMD = '\e',
@@ -135,6 +135,8 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - other useful stuff
         readline.parse_and_bind('set skip-completed-text on')
+        readline.parse_and_bind('set colored-completion-prefix on')
+        readline.parse_and_bind('set blink-matching-paren on')
         readline.set_completer(self.improved_rlcompleter())
 
     def init_prompt(self):
