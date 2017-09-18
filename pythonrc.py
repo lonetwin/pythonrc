@@ -155,21 +155,21 @@ class ImprovedConsole(InteractiveConsole, object):
     def init_pprint(self):
         """Activates pretty-printing of output values.
         """
-        try:
-            rows, cols = subprocess.check_output('stty size', shell=True).strip().split()
-        except:
-            cols = 80
         keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
-
+        color_dict = partial(keys_re.sub, lambda m: purple(m.group()))
+        format_it = pprint.pformat if sys.version_info.major == 2 else partial(pprint.pformat, compact=True)
         def pprint_callback(value):
             if value is not None:
+                try:
+                    rows, cols = os.get_teminal_size()
+                except AttributeError:
+                    try:
+                        rows, cols = map(int, subprocess.check_output(['stty', 'size']).split())
+                    except:
+                        cols = 80
                 builtins._ = value
-                formatted = pprint.pformat(value, width=cols)
-                if issubclass(type(value), dict):
-                    formatted = keys_re.sub(lambda m: purple(m.group()), formatted)
-                    print(formatted)
-                else:
-                    print(blue(formatted))
+                formatted = format_it(value)
+                print(color_dict(formatted) if issubclass(type(value), dict) else blue(formatted))
         sys.displayhook = pprint_callback
 
     def improved_rlcompleter(self):
