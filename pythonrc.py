@@ -86,25 +86,6 @@ config = dict(
 )
 
 
-def create_color_func(code):
-    def color_func(text, bold=True, readline_workaround=False):
-        code_str = '1;{}'.format(code) if bold else code
-        # - reason for readline_workaround: http://bugs.python.org/issue20359
-        if readline_workaround:
-            return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
-        else:
-            return "\033[{}m{}\033[0m".format(code_str, text)
-    return color_func
-
-# add any colors you might need.
-red    = create_color_func(31)
-green  = create_color_func(32)
-yellow = create_color_func(33)
-blue   = create_color_func(34)
-purple = create_color_func(35)
-cyan   = create_color_func(36)
-
-
 class ImprovedConsole(InteractiveConsole, object):
 
     def __init__(self, tab='    ', *args, **kwargs):
@@ -113,9 +94,25 @@ class ImprovedConsole(InteractiveConsole, object):
         self.tab = tab
         self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
+        self.init_color_functions()
         self.init_readline()
         self.init_prompt()
         self.init_pprint()
+
+    def init_color_functions(self):
+        """Populates globals dict with some helper functions for colorizing text
+        """
+        def colorize(color_code, text, bold=True, readline_workaround=False):
+            code_str = '1;{}'.format(color_code) if bold else color_code
+            # - reason for readline_workaround: http://bugs.python.org/issue20359
+            if readline_workaround:
+                return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
+            else:
+                return "\033[{}m{}\033[0m".format(code_str, text)
+
+        g = globals()
+        for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan'], 31):
+            g[color] = partial(colorize, code)
 
     def init_readline(self):
         """Activates history and tab completion
@@ -217,7 +214,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         line = InteractiveConsole.raw_input(self, *args)
         if line == config['HELP_CMD']:
-            print(HELP)
+            print(cyan(main.__doc__).format(**config))
             line = ''
         elif line.startswith(config['EDIT_CMD']):
             line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
@@ -444,60 +441,64 @@ class ImprovedConsole(InteractiveConsole, object):
                 self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
 
 
-# Welcome message
-HELP = cyan("""Welcome to lonetwin's pimped up python prompt
+def main():
+    """
+    Welcome to lonetwin's pimped up python prompt
 
-You've got color, tab completion, auto-indentation, pretty-printing and more !
+    You've got color, tab completion, auto-indentation, pretty-printing and more !
 
-* A tab with preceding text will attempt auto-completion of keywords,
-  names in the current namespace, attributes and methods. If the preceding
-  text has a '/', filename completion will be attempted. Without preceding
-  text four spaces will be inserted.
+    * A tab with preceding text will attempt auto-completion of keywords,
+      names in the current namespace, attributes and methods. If the preceding
+      text has a '/', filename completion will be attempted. Without preceding
+      text four spaces will be inserted.
 
-* History will be saved in {HISTFILE} when you exit.
+    * History will be saved in {HISTFILE} when you exit.
 
-* Typing out a defined name followed by a '{DOC_CMD}' will print out the
-  object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
+    * Typing out a defined name followed by a '{DOC_CMD}' will print out the
+      object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
 
-* Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
-  {DOC_URL}
-  (eg: try webbrowser.open??)
+    * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
+      {DOC_URL}
+      (eg: try webbrowser.open??)
 
-* Open the your editor with current session history, source code of objects
-  or arbitrary files, using the '{EDIT_CMD}' command.
+    * Open the your editor with current session history, source code of objects
+      or arbitrary files, using the '{EDIT_CMD}' command.
 
-* List source code for objects using the '{LIST_CMD}' command.
+    * List source code for objects using the '{LIST_CMD}' command.
 
-* Execute shell commands using the '{SH_EXEC}' command.
+    * Execute shell commands using the '{SH_EXEC}' command.
 
-Try `<cmd> -h` for any of the commands to learn more.
-""".format(**config))
+    Try `<cmd> -h` for any of the commands to learn more.
+    """
+    # - create our pimped out console
+    pymp = ImprovedConsole()
+    banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
 
-# - create our pimped out console
-pymp = ImprovedConsole()
-banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
+    # - fire it up !
+    retries = 2
+    while retries:
+        try:
+            pymp.interact(banner=banner)
+        except SystemExit:
+            # Fixes #2: exit when 'quit()' invoked
+            break
+        except:
+            import traceback
+            retries -= 1
+            print(red("I'm sorry, ImprovedConsole could not handle that !\n"
+                      "Please report an error with this traceback, I would really appreciate that !"))
+            traceback.print_exc()
 
-# - fire it up !
-retries = 2
-while retries:
-    try:
-        pymp.interact(banner=banner)
-    except SystemExit:
-        # Fixes #2: exit when 'quit()' invoked
-        break
-    except:
-        import traceback
-        retries -= 1
-        print(red("I'm sorry, ImprovedConsole could not handle that !\n"
-                  "Please report an error with this traceback, I would really appreciate that !"))
-        traceback.print_exc()
+            print(red("I shall try to restore the crashed session.\n"
+                      "If the crash occurs again, please exit the session"))
+            banner = blue("Your crashed session has been restored")
+        else:
+            # exit with a Ctrl-D
+            break
 
-        print(red("I shall try to restore the crashed session.\n"
-                  "If the crash occurs again, please exit the session"))
-        banner = blue("Your crashed session has been restored")
-    else:
-        # exit with a Ctrl-D
-        break
+    # Exit the Python shell on exiting the InteractiveConsole
+    sys.exit()
 
-# Exit the Python shell on exiting the InteractiveConsole
-sys.exit()
+
+if __name__ == '__main__':
+    main()
