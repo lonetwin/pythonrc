@@ -170,7 +170,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     except:
                         cols = 80
                 builtins._ = value
-                formatted = format_it(value)
+                formatted = format_it(value, width=cols)
                 print(color_dict(formatted) if issubclass(type(value), dict) else blue(formatted))
         sys.displayhook = pprint_callback
 
