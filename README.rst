@@ -54,6 +54,43 @@ provides:
 If you have any other good ideas please feel free to submit pull requests or issues.
 
 
+Configuration
+=============
+
+The code attempts to be easy to read and modify to suit personal preferences as
+easily as possible. You can change any of the `commands` or the options like the
+path to the history file, its size etc in the config dict at the top of the rc
+file. For instance, if you prefer to set the default edit command to `%edit`
+instead of the default `\e`, you just have to change the entry in the config
+dict.
+
+Note that, the `init_readline()` method also reads your `.inputrc` file if it
+exists. This allows you to share the same `readline` behavior as all other tools
+that use readline. For instance, in my personal `~/.inputrc` I have the
+following::
+
+    # - when performing completion in the middle of a word, do not insert characters
+    # from the completion that match characters after point in the word being
+    # completed
+    set skip-completed-text on
+
+    # - displays possible completions using different colors according to file type.
+    set colored-stats on
+
+    # - show completed prefix in a different color
+    set colored-completion-prefix on
+
+    # - jump temporarily to matching open parenthesis
+    set blink-matching-paren on
+
+    set expand-tilde on
+    set history-size -1
+    set history-preserve-point on
+
+    "\e[A": history-search-backward
+    "\e[B": history-search-forward
+
+
 A little history
 ================
 

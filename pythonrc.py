@@ -87,6 +87,34 @@ config = dict(
 
 
 class ImprovedConsole(InteractiveConsole, object):
+    """
+    Welcome to lonetwin's pimped up python prompt
+
+    You've got color, tab completion, auto-indentation, pretty-printing and more !
+
+    * A tab with preceding text will attempt auto-completion of keywords,
+      names in the current namespace, attributes and methods. If the preceding
+      text has a '/', filename completion will be attempted. Without preceding
+      text four spaces will be inserted.
+
+    * History will be saved in {HISTFILE} when you exit.
+
+    * Typing out a defined name followed by a '{DOC_CMD}' will print out the
+      object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
+
+    * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
+      {DOC_URL}
+      (eg: try webbrowser.open??)
+
+    * Open the your editor with current session history, source code of objects
+      or arbitrary files, using the '{EDIT_CMD}' command.
+
+    * List source code for objects using the '{LIST_CMD}' command.
+
+    * Execute shell commands using the '{SH_EXEC}' command.
+
+    Try `<cmd> -h` for any of the commands to learn more.
+    """
 
     def __init__(self, tab='    ', *args, **kwargs):
         self.session_history = []  # This holds the last executed statements
@@ -126,15 +154,13 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - turn on tab completion
         readline.parse_and_bind('tab: complete')
+        readline.set_completer(self.improved_rlcompleter())
 
         # - enable auto-indenting
         readline.set_pre_input_hook(self.auto_indent_hook)
 
         # - other useful stuff
-        readline.parse_and_bind('set skip-completed-text on')
-        readline.parse_and_bind('set colored-completion-prefix on')
-        readline.parse_and_bind('set blink-matching-paren on')
-        readline.set_completer(self.improved_rlcompleter())
+        readline.read_init_file()
 
     def init_prompt(self):
         """Activates color on the prompt based on python version.
@@ -156,7 +182,10 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
         color_dict = partial(keys_re.sub, lambda m: purple(m.group()))
-        format_it = pprint.pformat if sys.version_info.major == 2 else partial(pprint.pformat, compact=True)
+        format_func = pprint.pformat
+        if sys.version_info.major > 3 and sys.version.minor > 3:
+            format_func = partial(pprint.pformat, compact=True)
+
         def pprint_callback(value):
             if value is not None:
                 try:
@@ -167,8 +196,9 @@ class ImprovedConsole(InteractiveConsole, object):
                     except:
                         cols = 80
                 builtins._ = value
-                formatted = format_it(value, width=cols)
+                formatted = format_func(value, width=cols)
                 print(color_dict(formatted) if issubclass(type(value), dict) else blue(formatted))
+
         sys.displayhook = pprint_callback
 
     def improved_rlcompleter(self):
@@ -214,7 +244,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         line = InteractiveConsole.raw_input(self, *args)
         if line == config['HELP_CMD']:
-            print(cyan(main.__doc__).format(**config))
+            print(cyan(self.__doc__).format(**config))
             line = ''
         elif line.startswith(config['EDIT_CMD']):
             line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
@@ -440,65 +470,36 @@ class ImprovedConsole(InteractiveConsole, object):
             for line_no, line in enumerate(src_lines):
                 self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
 
+    def interact(self):
+        """A forgiving wrapper around InteractiveConsole.interact()
+        """
+        banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
+        retries = 2
+        while retries:
+            try:
+                super(ImprovedConsole, self).interact(banner=banner)
+            except SystemExit:
+                # Fixes #2: exit when 'quit()' invoked
+                break
+            except:
+                import traceback
+                retries -= 1
+                print(red("I'm sorry, ImprovedConsole could not handle that !\n"
+                          "Please report an error with this traceback, "
+                          "I would really appreciate that !"))
+                traceback.print_exc()
 
-def main():
-    """
-    Welcome to lonetwin's pimped up python prompt
+                print(red("I shall try to restore the crashed session.\n"
+                          "If the crash occurs again, please exit the session"))
+                banner = blue("Your crashed session has been restored")
+            else:
+                # exit with a Ctrl-D
+                break
 
-    You've got color, tab completion, auto-indentation, pretty-printing and more !
-
-    * A tab with preceding text will attempt auto-completion of keywords,
-      names in the current namespace, attributes and methods. If the preceding
-      text has a '/', filename completion will be attempted. Without preceding
-      text four spaces will be inserted.
-
-    * History will be saved in {HISTFILE} when you exit.
-
-    * Typing out a defined name followed by a '{DOC_CMD}' will print out the
-      object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
-
-    * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
-      {DOC_URL}
-      (eg: try webbrowser.open??)
-
-    * Open the your editor with current session history, source code of objects
-      or arbitrary files, using the '{EDIT_CMD}' command.
-
-    * List source code for objects using the '{LIST_CMD}' command.
-
-    * Execute shell commands using the '{SH_EXEC}' command.
-
-    Try `<cmd> -h` for any of the commands to learn more.
-    """
-    # - create our pimped out console
-    pymp = ImprovedConsole()
-    banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
-
-    # - fire it up !
-    retries = 2
-    while retries:
-        try:
-            pymp.interact(banner=banner)
-        except SystemExit:
-            # Fixes #2: exit when 'quit()' invoked
-            break
-        except:
-            import traceback
-            retries -= 1
-            print(red("I'm sorry, ImprovedConsole could not handle that !\n"
-                      "Please report an error with this traceback, I would really appreciate that !"))
-            traceback.print_exc()
-
-            print(red("I shall try to restore the crashed session.\n"
-                      "If the crash occurs again, please exit the session"))
-            banner = blue("Your crashed session has been restored")
-        else:
-            # exit with a Ctrl-D
-            break
-
-    # Exit the Python shell on exiting the InteractiveConsole
-    sys.exit()
+        # Exit the Python shell on exiting the InteractiveConsole
+        sys.exit()
 
 
-if __name__ == '__main__':
-    main()
+if not os.getenv('SKIP_PYMP'):
+    # - create our pimped out console and fire it up !
+    pymp = ImprovedConsole().interact()
