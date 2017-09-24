@@ -75,3 +75,35 @@ class TestImprovedConsole(TestCase):
                 ("%s\n" "{%s42}\n") % (pythonrc.blue('42'),
                                        pythonrc.purple("'spam': "))
             )
+
+    def test_completer(self):
+        completer = self.pymp.improved_rlcompleter()
+        rl = pythonrc.readline
+
+        # - no leading characters
+        with patch.object(rl, 'get_line_buffer', return_value='\t'):
+            self.assertEqual(completer('\t', 0), '    ')
+
+        # - keyword completion
+        with patch.object(rl, 'get_line_buffer', return_value='imp\t'):
+            self.assertEqual(completer('imp', 0), 'import ')
+
+        # - module name completion
+        with patch.object(rl, 'get_line_buffer', return_value='from '):
+            self.assertIn(completer('th', 0), ('this', 'threading'))
+            self.assertIn(completer('th', 1), ('this', 'threading'))
+
+        # - pathname completion
+        with patch.object(rl, 'get_line_buffer', return_value='./p'):
+            self.assertEqual(completer('./py', 0), './pythonrc.py')
+
+    def test_push(self):
+        self.assertEqual(self.pymp._indent, '')
+        self.pymp.push('class Foo:')
+        self.assertEqual(self.pymp._indent, '    ')
+        self.pymp.push('    def dummy():')
+        self.assertEqual(self.pymp._indent, '        ')
+        self.pymp.push('        pass')
+        self.assertEqual(self.pymp._indent, '        ')
+        self.pymp.push('')
+        self.assertEqual(self.pymp._indent, '')

@@ -380,7 +380,10 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         if arg:
             obj = self.lookup(arg)
-            filename = inspect.getsourcefile(obj) if obj else arg
+            try:
+                filename = inspect.getsourcefile(obj) if obj else arg
+            except (IOError, TypeError, NameError) as e:
+                return self.writeline(e)
         else:
             # - make a list of all lines in session history, commenting
             # any non-blank lines.
