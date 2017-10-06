@@ -482,7 +482,9 @@ class ImprovedConsole(InteractiveConsole, object):
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
         """
-        banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
+        banner = ("Welcome to the ImprovedConsole (version {version})\n"
+                  "Type in {HELP_CMD} for list of features.").format(version=__version__,
+                                                                    **config)
         retries = 2
         while retries:
             try:
