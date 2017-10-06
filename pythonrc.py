@@ -70,7 +70,18 @@ from collections import namedtuple
 from functools import partial
 from tempfile import NamedTemporaryFile
 
+
+# Fix for Issue #5
+# - Exit if being called from within ipython
+try:
+    if get_ipython():
+        sys.exit(0)
+except NameError:
+    pass
+
+
 __version__ = "0.5"
+
 
 config = dict(
     HISTFILE = os.path.expanduser("~/.python_history"),
