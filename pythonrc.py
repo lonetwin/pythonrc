@@ -433,29 +433,24 @@ class ImprovedConsole(InteractiveConsole, object):
         >>> _
         CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
         """
-        cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
-            cmd = cmd.format(**self.locals)
-            if cmd.split()[0] == "cd":
-                try:
+            try:
+                cmd = cmd.format(**self.locals)
+                if cmd.split()[0] == "cd":
                     args = cmd.split()
                     if len(args) > 2:
                         raise ValueError("Too many arguments passed to cd")
                     os.chdir(os.path.expanduser(os.path.expandvars(args[1])))
-                except:
-                    self.showtraceback()
-            else:
-                try:
-                    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                except:
-                    self.showtraceback()
                 else:
+                    cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
+                    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     out, err = process.communicate()
                     rc = process.returncode
-                    print ('{}'.format(red(err.decode('utf-8')
-                                           if err else green(out.decode('utf-8'), bold=False))))
+                    print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
                     builtins._ = cmd_exec(out, err, rc)
                     del cmd_exec
+            except:
+                self.showtraceback()
         else:
             if os.getenv('SSH_CONNECTION'):
                 # I use the bash function similar to the one below in my
