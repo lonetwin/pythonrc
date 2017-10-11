@@ -101,30 +101,35 @@ class ImprovedConsole(InteractiveConsole, object):
     """
     Welcome to lonetwin's pimped up python prompt
 
-    You've got color, tab completion, auto-indentation, pretty-printing and more !
+    You've got color, tab completion, auto-indentation, pretty-printing
+    and more !
 
-    * A tab with preceding text will attempt auto-completion of keywords,
-      names in the current namespace, attributes and methods. If the preceding
-      text has a '/', filename completion will be attempted. Without preceding
-      text four spaces will be inserted.
+    * A tab with preceding text will attempt auto-completion of
+      keywords, names in the current namespace, attributes and methods.
+      If the preceding text has a '/', filename completion will be
+      attempted. Without preceding text four spaces will be inserted.
 
     * History will be saved in {HISTFILE} when you exit.
 
-    * Typing out a defined name followed by a '{DOC_CMD}' will print out the
-      object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
+    * Typing out a defined name followed by a '{DOC_CMD}' will print out
+      the object's __doc__ attribute if one exists.
+      (eg: []? / str? / os.getcwd? )
 
     * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
       {DOC_URL}
       (eg: try webbrowser.open??)
 
-    * Open the your editor with current session history, source code of objects
-      or arbitrary files, using the '{EDIT_CMD}' command.
+    * Open the your editor with current session history, source code of
+      objects or arbitrary files, using the '{EDIT_CMD}' command.
 
     * List source code for objects using the '{LIST_CMD}' command.
 
     * Execute shell commands using the '{SH_EXEC}' command.
 
     Try `<cmd> -h` for any of the commands to learn more.
+
+    The EDITOR, SHELL, command names and more can be changed in the
+    config dict at the top of this file. Make this your own !
     """
 
     def __init__(self, tab='    ', *args, **kwargs):
@@ -294,6 +299,9 @@ class ImprovedConsole(InteractiveConsole, object):
                 # - empty line, decrease indent
                 self._indent = self._indent[:-len(self.tab)]
                 line = self._indent
+        elif line.startswith('%'):
+            self.writeline('Y U NO LIKE ME?')
+            return line
         return line or ''
 
     def push(self, line):
