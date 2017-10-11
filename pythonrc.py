@@ -47,6 +47,15 @@ If you have any other good ideas please feel free to submit issues/pull requests
 enabled however it does not do pathname completion
 """
 
+
+# Fix for Issue #5
+# - Exit if being called from within ipython
+try:
+    import sys
+    __IPYTHON__ and sys.exit(0)
+except NameError:
+    pass
+
 try:
     import builtins
 except ImportError:
@@ -64,22 +73,12 @@ import rlcompleter
 import shlex
 import signal
 import subprocess
-import sys
 import webbrowser
 
 from code import InteractiveConsole
 from collections import namedtuple
 from functools import partial
 from tempfile import NamedTemporaryFile
-
-
-# Fix for Issue #5
-# - Exit if being called from within ipython
-try:
-    if get_ipython():
-        sys.exit(0)
-except NameError:
-    pass
 
 
 __version__ = "0.6"
