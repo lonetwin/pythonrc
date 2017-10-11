@@ -60,6 +60,7 @@ import pprint
 import re
 import readline
 import rlcompleter
+import shlex
 import signal
 import subprocess
 import sys
@@ -444,14 +445,12 @@ class ImprovedConsole(InteractiveConsole, object):
         if cmd:
             try:
                 cmd = cmd.format(**self.locals)
-                if cmd.split()[0] == "cd":
-                    args = cmd.split()
-                    if len(args) > 2:
-                        raise ValueError("Too many arguments passed to cd")
-                    os.chdir(os.path.expanduser(os.path.expandvars(args[1])))
+                cmd = shlex.split(cmd)
+                if cmd[0] == 'cd':
+                    os.chdir(os.path.expanduser(os.path.expandvars(' '.join(cmd[1:]) or '${HOME}')))
                 else:
                     cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
-                    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     out, err = process.communicate()
                     rc = process.returncode
                     print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
