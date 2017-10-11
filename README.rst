@@ -25,6 +25,10 @@ started, if `$PYTHONSTARTUP` is in your environment and points to the file.
 
 You could also simply make the file executable and call it directly.
 
+Additionally, this file will in turn, execute a virtual env specific rc file [#]_
+if it exists, for the current session, enabling you to *pre-populate* sessions
+specific to virtual environments.
+
 Features
 ========
 
@@ -34,24 +38,67 @@ provides:
 * execution history
 * colored prompts and pretty printing
 * auto-indentation
-* intelligent tab completion [1]_
+* intelligent tab completion [#]_
+
     - without preceding text four spaces
     - with preceding text
+
         + names in the current namespace
         + for objects, their attributes/methods
         + for strings with a `/`, pathname completion
         + module name completion in an import statement
+
 * edit the session or a file in your `$EDITOR` (the `\e` command)
+
     - without no arguments, opens your `$EDITOR` with the session history
     - with filename argument, opens the file in your `$EDITOR`
     - with object as an argument, opens the source code for the object in `$EDITOR`
+
 * list the source code for objects when available (the `\l` command)
 * temporary escape to `$SHELL` or ability to execute a shell command and
   capturing the output in to the `_` variable (the `!` command)
 * convenient printing of doc stings (the `?` command) and search for entries in
   online docs (the `??` command)
+* auto-execution of a virtual env specific (`.venv_rc.py`) file at startup
 
 If you have any other good ideas please feel free to submit pull requests or issues.
+
+
+Configuration
+=============
+
+The code attempts to be easy to read and modify to suit personal preferences as
+easily as possible. You can change any of the `commands` or the options like the
+path to the history file, its size etc in the config dict at the top of the rc
+file. For instance, if you prefer to set the default edit command to `%edit`
+instead of the default `\e`, you just have to change the entry in the config
+dict.
+
+Note that, the `init_readline()` method also reads your `.inputrc` file if it
+exists. This allows you to share the same `readline` behavior as all other tools
+that use readline. For instance, in my personal `~/.inputrc` I have the
+following::
+
+    # - when performing completion in the middle of a word, do not insert characters
+    # from the completion that match characters after point in the word being
+    # completed
+    set skip-completed-text on
+
+    # - displays possible completions using different colors according to file type.
+    set colored-stats on
+
+    # - show completed prefix in a different color
+    set colored-completion-prefix on
+
+    # - jump temporarily to matching open parenthesis
+    set blink-matching-paren on
+
+    set expand-tilde on
+    set history-size -1
+    set history-preserve-point on
+
+    "\e[A": history-search-backward
+    "\e[B": history-search-forward
 
 
 A little history
@@ -113,7 +160,8 @@ There are two possible workarounds for this:
   namespace with everything in the pythonrc file.
 
 
-.. [1] Since python 3.4 the default interpreter also has tab completion enabled however it does not do pathname completion
+.. [1] Named `.venv_rc.py` by default, but like almost everything else, is configurable
+.. [2] Since python 3.4 the default interpreter also has tab completion enabled however it does not do pathname completion
 .. _ipython: https://ipython.org/
 .. _bpython: https://bpython-interpreter.org/
 .. _InteractiveConsole: https://docs.python.org/3.6/library/code.html#code.InteractiveConsole

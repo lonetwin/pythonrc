@@ -39,6 +39,7 @@ This file creates an InteractiveConsole instance, which provides:
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the result into the '_' variable
   * convenient printing of doc stings and search for entries in online docs
+  * auto-execution of a virtual env specific (`.venv_rc.py`) file at startup
 
 If you have any other good ideas please feel free to submit issues/pull requests.
 
@@ -60,6 +61,7 @@ import pprint
 import re
 import readline
 import rlcompleter
+import shlex
 import signal
 import subprocess
 import sys
@@ -70,42 +72,72 @@ from collections import namedtuple
 from functools import partial
 from tempfile import NamedTemporaryFile
 
-__version__ = "0.5"
+
+# Fix for Issue #5
+# - Exit if being called from within ipython
+try:
+    if get_ipython():
+        sys.exit(0)
+except NameError:
+    pass
+
+
+__version__ = "0.6"
+
 
 config = dict(
     HISTFILE = os.path.expanduser("~/.python_history"),
-    HISTSIZE = 1000,
-    EDITOR   = os.environ.get('EDITOR', 'vi'),
-    SHELL    = os.environ.get('SHELL', '/bin/bash'),
+    HISTSIZE = -1,
+    EDITOR   = os.getenv('EDITOR', 'vi'),
+    SHELL    = os.getenv('SHELL', '/bin/bash'),
     EDIT_CMD = '\e',
     SH_EXEC  = '!',
     DOC_CMD  = '?',
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
     HELP_CMD = '\h',
     LIST_CMD = '\l',
+    VENV_RC  = ".venv_rc.py"
 )
 
 
-def create_color_func(code):
-    def color_func(text, bold=True, readline_workaround=False):
-        code_str = '1;{}'.format(code) if bold else code
-        # - reason for readline_workaround: http://bugs.python.org/issue20359
-        if readline_workaround:
-            return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
-        else:
-            return "\033[{}m{}\033[0m".format(code_str, text)
-    return color_func
-
-# add any colors you might need.
-red    = create_color_func(31)
-green  = create_color_func(32)
-yellow = create_color_func(33)
-blue   = create_color_func(34)
-purple = create_color_func(35)
-cyan   = create_color_func(36)
-
-
 class ImprovedConsole(InteractiveConsole, object):
+    """
+    Welcome to lonetwin's pimped up python prompt
+
+    You've got color, tab completion, auto-indentation, pretty-printing
+    and more !
+
+    * A tab with preceding text will attempt auto-completion of
+      keywords, names in the current namespace, attributes and methods.
+      If the preceding text has a '/', filename completion will be
+      attempted. Without preceding text four spaces will be inserted.
+
+    * History will be saved in {HISTFILE} when you exit.
+
+    * If you create a file named {VENV_RC} in the current directory, the
+      contents will be executed in this session before the prompt is
+      shown.
+
+    * Typing out a defined name followed by a '{DOC_CMD}' will print out
+      the object's __doc__ attribute if one exists.
+      (eg: []? / str? / os.getcwd? )
+
+    * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the
+      term at {DOC_URL}
+      (eg: try webbrowser.open??)
+
+    * Open the your editor with current session history, source code of
+      objects or arbitrary files, using the '{EDIT_CMD}' command.
+
+    * List source code for objects using the '{LIST_CMD}' command.
+
+    * Execute shell commands using the '{SH_EXEC}' command.
+
+    Try `<cmd> -h` for any of the commands to learn more.
+
+    The EDITOR, SHELL, command names and more can be changed in the
+    config dict at the top of this file. Make this your own !
+    """
 
     def __init__(self, tab='    ', *args, **kwargs):
         self.session_history = []  # This holds the last executed statements
@@ -113,9 +145,25 @@ class ImprovedConsole(InteractiveConsole, object):
         self.tab = tab
         self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
+        self.init_color_functions()
         self.init_readline()
         self.init_prompt()
         self.init_pprint()
+
+    def init_color_functions(self):
+        """Populates globals dict with some helper functions for colorizing text
+        """
+        def colorize(color_code, text, bold=True, readline_workaround=False):
+            code_str = '1;{}'.format(color_code) if bold else color_code
+            # - reason for readline_workaround: http://bugs.python.org/issue20359
+            if readline_workaround:
+                return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
+            else:
+                return "\033[{}m{}\033[0m".format(code_str, text)
+
+        g = globals()
+        for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan'], 31):
+            g[color] = partial(colorize, code)
 
     def init_readline(self):
         """Activates history and tab completion
@@ -129,13 +177,13 @@ class ImprovedConsole(InteractiveConsole, object):
 
         # - turn on tab completion
         readline.parse_and_bind('tab: complete')
+        readline.set_completer(self.improved_rlcompleter())
 
         # - enable auto-indenting
         readline.set_pre_input_hook(self.auto_indent_hook)
 
         # - other useful stuff
-        readline.parse_and_bind('set skip-completed-text on')
-        readline.set_completer(self.improved_rlcompleter())
+        readline.read_init_file()
 
     def init_prompt(self):
         """Activates color on the prompt based on python version.
@@ -147,29 +195,33 @@ class ImprovedConsole(InteractiveConsole, object):
         sys.ps1 = prompt_color('>>> ', readline_workaround=True)
         sys.ps2 = red('... ', readline_workaround=True)
         # - if we are over a remote connection, modify the ps1
-        if os.environ.get('SSH_CONNECTION'):
-            this_host = os.environ['SSH_CONNECTION'].split()[-2]
+        if os.getenv('SSH_CONNECTION'):
+            _, _, this_host, _ = os.getenv('SSH_CONNECTION').split()
             sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
             sys.ps2 = red('[{}]... '.format(this_host), readline_workaround=True)
 
     def init_pprint(self):
         """Activates pretty-printing of output values.
         """
-        try:
-            rows, cols = subprocess.check_output('stty size', shell=True).strip().split()
-        except:
-            cols = 80
         keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
+        color_dict = partial(keys_re.sub, lambda m: purple(m.group()))
+        format_func = pprint.pformat
+        if sys.version_info.major > 3 and sys.version.minor > 3:
+            format_func = partial(pprint.pformat, compact=True)
 
         def pprint_callback(value):
             if value is not None:
+                try:
+                    rows, cols = os.get_teminal_size()
+                except AttributeError:
+                    try:
+                        rows, cols = map(int, subprocess.check_output(['stty', 'size']).split())
+                    except:
+                        cols = 80
                 builtins._ = value
-                formatted = pprint.pformat(value, width=cols)
-                if issubclass(type(value), dict):
-                    formatted = keys_re.sub(lambda m: purple(m.group()), formatted)
-                    print(formatted)
-                else:
-                    print(blue(formatted))
+                formatted = format_func(value, width=cols)
+                print(color_dict(formatted) if issubclass(type(value), dict) else blue(formatted))
+
         sys.displayhook = pprint_callback
 
     def improved_rlcompleter(self):
@@ -215,7 +267,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         line = InteractiveConsole.raw_input(self, *args)
         if line == config['HELP_CMD']:
-            print(HELP)
+            print(cyan(self.__doc__).format(**config))
             line = ''
         elif line.startswith(config['EDIT_CMD']):
             line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
@@ -254,6 +306,9 @@ class ImprovedConsole(InteractiveConsole, object):
                 # - empty line, decrease indent
                 self._indent = self._indent[:-len(self.tab)]
                 line = self._indent
+        elif line.startswith('%'):
+            self.writeline('Y U NO LIKE ME?')
+            return line
         return line or ''
 
     def push(self, line):
@@ -333,9 +388,10 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_edit_cmd(self, arg=''):
-        """
-        {EDIT_CMD} [object|filename] - Open {EDITOR} with session
-        history, provided filename or object's source file.
+        """{EDIT_CMD} [object|filename]
+
+        Open {EDITOR} with session history, provided filename or
+        object's source file.
 
         - without arguments, a temporary file containing session history is
           created and opened in {EDITOR}. On quitting the editor, all
@@ -350,7 +406,10 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         if arg:
             obj = self.lookup(arg)
-            filename = inspect.getsourcefile(obj) if obj else arg
+            try:
+                filename = inspect.getsourcefile(obj) if obj else arg
+            except (IOError, TypeError, NameError) as e:
+                return self.writeline(e)
         else:
             # - make a list of all lines in session history, commenting
             # any non-blank lines.
@@ -368,8 +427,9 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_sh_cmd(self, cmd):
-        """
-        {SH_EXEC} [cmd [args ...] | {{fmt string}}] - Escape to {SHELL} or execute `cmd` in {SHELL}
+        """{SH_EXEC} [cmd [args ...] | {{fmt string}}]
+
+        Escape to {SHELL} or execute `cmd` in {SHELL}
 
         - without arguments, the current interpreter will be suspended
           and you will be dropped in a {SHELL} prompt. Use fg to return.
@@ -388,31 +448,24 @@ class ImprovedConsole(InteractiveConsole, object):
         >>> _
         CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
         """
-        cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
         if cmd:
-            cmd = cmd.format(**self.locals)
-            if cmd.split()[0] == "cd":
-                try:
-                    args = cmd.split()
-                    if len(args) > 2:
-                        raise ValueError("Too many arguments passed to cd")
-                    os.chdir(os.path.expanduser(os.path.expandvars(args[1])))
-                except:
-                    self.showtraceback()
-            else:
-                try:
-                    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                except:
-                    self.showtraceback()
+            try:
+                cmd = cmd.format(**self.locals)
+                cmd = shlex.split(cmd)
+                if cmd[0] == 'cd':
+                    os.chdir(os.path.expanduser(os.path.expandvars(' '.join(cmd[1:]) or '${HOME}')))
                 else:
+                    cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     out, err = process.communicate()
                     rc = process.returncode
-                    print ('{}'.format(red(err.decode('utf-8')
-                                           if err else green(out.decode('utf-8'), bold=False))))
+                    print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
                     builtins._ = cmd_exec(out, err, rc)
                     del cmd_exec
+            except:
+                self.showtraceback()
         else:
-            if os.environ.get('SSH_CONNECTION'):
+            if os.getenv('SSH_CONNECTION'):
                 # I use the bash function similar to the one below in my
                 # .bashrc to directly open a python prompt on remote
                 # systems I log on to.
@@ -439,61 +492,49 @@ class ImprovedConsole(InteractiveConsole, object):
             for line_no, line in enumerate(src_lines):
                 self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
 
+    def interact(self):
+        """A forgiving wrapper around InteractiveConsole.interact()
+        """
+        venv_rc_done = '(no venv rc found)'
+        try:
+            for line in open(config['VENV_RC']):
+                pymp.push(line)
+            venv_rc_done = green('Successfully executed venv rc !')
+        except IOError:
+            pass
 
-# Welcome message
-HELP = cyan("""Welcome to lonetwin's pimped up python prompt
+        banner = ("Welcome to the ImprovedConsole (version {version})\n"
+                  "Type in {HELP_CMD} for list of features.\n"
+                  "{venv_rc_done}").format(
+                      version=__version__, venv_rc_done=venv_rc_done, **config)
 
-You've got color, tab completion, auto-indentation, pretty-printing and more !
+        retries = 2
+        while retries:
+            try:
+                super(ImprovedConsole, self).interact(banner=banner)
+            except SystemExit:
+                # Fixes #2: exit when 'quit()' invoked
+                break
+            except:
+                import traceback
+                retries -= 1
+                print(red("I'm sorry, ImprovedConsole could not handle that !\n"
+                          "Please report an error with this traceback, "
+                          "I would really appreciate that !"))
+                traceback.print_exc()
 
-* A tab with preceding text will attempt auto-completion of keywords,
-  names in the current namespace, attributes and methods. If the preceding
-  text has a '/', filename completion will be attempted. Without preceding
-  text four spaces will be inserted.
+                print(red("I shall try to restore the crashed session.\n"
+                          "If the crash occurs again, please exit the session"))
+                banner = blue("Your crashed session has been restored")
+            else:
+                # exit with a Ctrl-D
+                break
 
-* History will be saved in {HISTFILE} when you exit.
+        # Exit the Python shell on exiting the InteractiveConsole
+        sys.exit()
 
-* Typing out a defined name followed by a '{DOC_CMD}' will print out the
-  object's __doc__ attribute if one exists. (eg: []? / str? / os.getcwd? )
 
-* Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
-  {DOC_URL}
-  (eg: try webbrowser.open??)
-
-* Open the your editor with current session history, source code of objects
-  or arbitrary files, using the '{EDIT_CMD}' command.
-
-* List source code for objects using the '{LIST_CMD}' command.
-
-* Execute shell commands using the '{SH_EXEC}' command.
-
-Try `<cmd> -h` for any of the commands to learn more.
-""".format(**config))
-
-# - create our pimped out console
-pymp = ImprovedConsole()
-banner = "Welcome to the ImprovedConsole. Type in {HELP_CMD} for list of features".format(**config)
-
-# - fire it up !
-retries = 2
-while retries:
-    try:
-        pymp.interact(banner=banner)
-    except SystemExit:
-        # Fixes #2: exit when 'quit()' invoked
-        break
-    except:
-        import traceback
-        retries -= 1
-        print(red("I'm sorry, ImprovedConsole could not handle that !\n"
-                  "Please report an error with this traceback, I would really appreciate that !"))
-        traceback.print_exc()
-
-        print(red("I shall try to restore the crashed session.\n"
-                  "If the crash occurs again, please exit the session"))
-        banner = blue("Your crashed session has been restored")
-    else:
-        # exit with a Ctrl-D
-        break
-
-# Exit the Python shell on exiting the InteractiveConsole
-sys.exit()
+if not os.getenv('SKIP_PYMP'):
+    # - create our pimped out console and fire it up !
+    pymp = ImprovedConsole()
+    pymp.interact()
