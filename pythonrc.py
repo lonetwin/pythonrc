@@ -379,10 +379,8 @@ class ImprovedConsole(InteractiveConsole, object):
         unspecified.
         """
         components = name.split('.', 1)
-        if namespace is None:
-            obj = self.locals.get(components.pop(0))
-        else:
-            obj = getattr(namespace, components.pop(0), namespace)
+        name = components.pop(0)
+        obj = getattr(namespace, name, namespace) if namespace else self.locals.get(name)
         return self.lookup(components[0], obj) if components else obj
 
     @_doc_to_usage
