@@ -39,6 +39,7 @@ This file creates an InteractiveConsole instance, which provides:
   * temporary escape to $SHELL or ability to execute a shell command and
     capturing the result into the '_' variable
   * convenient printing of doc stings and search for entries in online docs
+  * auto-execution of a virtual env specific (`.venv_rc.py`) file at startup
 
 If you have any other good ideas please feel free to submit issues/pull requests.
 
@@ -81,7 +82,7 @@ except NameError:
     pass
 
 
-__version__ = "0.5"
+__version__ = "0.6"
 
 
 config = dict(
@@ -95,6 +96,7 @@ config = dict(
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
     HELP_CMD = '\h',
     LIST_CMD = '\l',
+    VENV_RC  = ".venv_rc.py"
 )
 
 
@@ -112,12 +114,16 @@ class ImprovedConsole(InteractiveConsole, object):
 
     * History will be saved in {HISTFILE} when you exit.
 
+    * If you create a file named {VENV_RC} in the current directory, the
+      contents will be executed in this session before the prompt is
+      shown.
+
     * Typing out a defined name followed by a '{DOC_CMD}' will print out
       the object's __doc__ attribute if one exists.
       (eg: []? / str? / os.getcwd? )
 
-    * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the term at
-      {DOC_URL}
+    * Typing '{DOC_CMD}{DOC_CMD}' after something will search for the
+      term at {DOC_URL}
       (eg: try webbrowser.open??)
 
     * Open the your editor with current session history, source code of
@@ -489,9 +495,19 @@ class ImprovedConsole(InteractiveConsole, object):
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
         """
+        venv_rc_done = '(no venv rc found)'
+        try:
+            for line in open(config['VENV_RC']):
+                pymp.push(line)
+            venv_rc_done = green('Successfully executed venv rc !')
+        except IOError:
+            pass
+
         banner = ("Welcome to the ImprovedConsole (version {version})\n"
-                  "Type in {HELP_CMD} for list of features.").format(version=__version__,
-                                                                    **config)
+                  "Type in {HELP_CMD} for list of features.\n"
+                  "{venv_rc_done}").format(
+                      version=__version__, venv_rc_done=venv_rc_done, **config)
+
         retries = 2
         while retries:
             try:
@@ -520,4 +536,5 @@ class ImprovedConsole(InteractiveConsole, object):
 
 if not os.getenv('SKIP_PYMP'):
     # - create our pimped out console and fire it up !
-    pymp = ImprovedConsole().interact()
+    pymp = ImprovedConsole()
+    pymp.interact()
