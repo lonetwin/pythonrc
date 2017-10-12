@@ -359,14 +359,15 @@ class ImprovedConsole(InteractiveConsole, object):
             tempbuf.write('\n'.join(lines))
         return tempbuf.name
 
-    def _exec_from_file(self, filename):
+    def _exec_from_file(self, filename, quiet=False):
         previous = ''
         for stmt in open(filename):
             # - skip over multiple empty lines
             stripped = stmt.strip()
             if stripped == '' and stripped == previous:
                 continue
-            self.write(cyan("... {}".format(stmt)))
+            if not quiet:
+                self.write(cyan("... {}".format(stmt)))
             if not stripped.startswith('#'):
                 line = stmt.strip('\n')
                 self.push(line)
@@ -494,8 +495,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         venv_rc_done = '(no venv rc found)'
         try:
-            for line in open(config['VENV_RC']):
-                pymp.push(line)
+            self._exec_from_file(config['VENV_RC'], quiet=True)
             venv_rc_done = green('Successfully executed venv rc !')
         except IOError:
             pass
