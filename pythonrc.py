@@ -349,8 +349,7 @@ class ImprovedConsole(InteractiveConsole, object):
             arg = arg.strip()
             if arg.startswith('-h') or arg.startswith('--help'):
                 return self.writeline(blue(method.__doc__.strip().format(**config)))
-            else:
-                return method(self, arg)
+            return method(self, arg)
         return inner
 
     def _mktemp_buffer(self, lines):
@@ -370,9 +369,8 @@ class ImprovedConsole(InteractiveConsole, object):
             if not quiet:
                 self.write(cyan("... {}".format(stmt)))
             if not stripped.startswith('#'):
-                line = stmt.strip('\n')
-                self.push(line)
-                readline.add_history(line)
+                self.push(stripped)
+                readline.add_history(stripped)
             previous = stripped
 
     def lookup(self, name, namespace=None):
