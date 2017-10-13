@@ -317,7 +317,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         more = super(ImprovedConsole, self).push(line)
         if more:
-            if line.endswith(":"):
+            if line[-1] in (":", '[', '{', '('):
                 self._indent += self.tab
         else:
             self._indent = ''
