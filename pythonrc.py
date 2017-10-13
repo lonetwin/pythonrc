@@ -153,12 +153,13 @@ class ImprovedConsole(InteractiveConsole, object):
         """Populates globals dict with some helper functions for colorizing text
         """
         def colorize(color_code, text, bold=True, readline_workaround=False):
-            code_str = '1;{}'.format(color_code) if bold else color_code
+            reset = '\033[0m'
+            color = '\033[{0}{1}m'.format('1;' if bold else '', color_code)
             # - reason for readline_workaround: http://bugs.python.org/issue20359
             if readline_workaround:
-                return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
-            else:
-                return "\033[{}m{}\033[0m".format(code_str, text)
+                color = '\001{color}\002'.format(color=color)
+                reset = '\001{reset}\002'.format(reset=reset)
+            return "{color}{text}{reset}".format(**vars())
 
         g = globals()
         for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan'], 31):
