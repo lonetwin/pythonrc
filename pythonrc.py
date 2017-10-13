@@ -486,8 +486,8 @@ class ImprovedConsole(InteractiveConsole, object):
         except (IOError, TypeError, NameError) as e:
             self.writeline(e)
         else:
-            for line_no, line in enumerate(src_lines):
-                self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
+            for line_no, line in enumerate(src_lines, offset+1):
+                self.write(cyan("{0:03d}: {1}".format(line_no, line)))
 
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
