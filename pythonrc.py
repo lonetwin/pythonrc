@@ -441,7 +441,7 @@ class ImprovedConsole(InteractiveConsole, object):
           line using the `.format()` syntax. for example:
 
         >>> filename = '/does/not/exist'
-        >>> !ls {{{{filename}}}}
+        >>> !ls {{filename}}
         ls: cannot access /does/not/exist: No such file or directory
         >>> _
         CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
