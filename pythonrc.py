@@ -168,8 +168,11 @@ class ImprovedConsole(InteractiveConsole, object):
         """Activates history and tab completion
         """
         # - init history
-        if os.path.exists(config['HISTFILE']):
+        try:
             readline.read_history_file(config['HISTFILE'])
+        except IOError:
+            # Probably .history file does not exist - ignoring exception
+            pass
 
         readline.set_history_length(config['HISTSIZE'])
         atexit.register(partial(readline.write_history_file, config['HISTFILE']))
@@ -182,7 +185,15 @@ class ImprovedConsole(InteractiveConsole, object):
         readline.set_pre_input_hook(self.auto_indent_hook)
 
         # - other useful stuff
-        readline.read_init_file()
+        try:
+            readline.read_init_file()
+        except IOError:
+            # An IOError here could have many causes, but the most likely one
+            # is that there's no .inputrc file (or .editrc file in the case of
+            # Mac OS X + libedit) in the expected location.  In that case, we
+            # want to ignore the exception.
+            # https://github.com/python/cpython/blob/master/Lib/site.py#L401-L449
+            pass
 
     def init_prompt(self):
         """Activates color on the prompt based on python version.
