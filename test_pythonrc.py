@@ -53,6 +53,13 @@ class TestImprovedConsole(TestCase):
                       ]:
             method.assert_called_once()
 
+    @patch('pythonrc.readline')
+    def test_libedit_readline(self, mock_readline):
+        mock_readline.__doc__ = 'libedit'
+        pymp = pythonrc.ImprovedConsole()
+        mock_readline.parse_and_bind.assert_called_once_with(
+            'bind ^I rl_complete')
+
     def test_init_prompt(self):
         self.assertRegexpMatches(
             sys.ps1, '\001\033\[1;3[23]m\002>>> \001\033\[0m\002'

@@ -168,33 +168,43 @@ class ImprovedConsole(InteractiveConsole, object):
     def init_readline(self):
         """Activates history and tab completion
         """
-        # - init history
+        # - mainly borrowed from site.enablerlcompleter() from py3.4+
+
+        # Reading the initialization (config) file may not be enough to set a
+        # completion key, so we set one first and then read the file.
+        readline_doc = getattr(readline, '__doc__', '')
+        if readline_doc is not None and 'libedit' in readline_doc:
+            readline.parse_and_bind('bind ^I rl_complete')
+        else:
+            readline.parse_and_bind('tab: complete')
+
         try:
-            readline.read_history_file(config['HISTFILE'])
-        except IOError:
-            # Probably .history file does not exist - ignoring exception
+            readline.read_init_file()
+        except OSError:
+            # An OSError here could have many causes, but the most likely one
+            # is that there's no .inputrc file (or .editrc file in the case of
+            # Mac OS X + libedit) in the expected location.  In that case, we
+            # want to ignore the exception.
             pass
 
+        if readline.get_current_history_length() == 0:
+            # If no history was loaded, default to .python_history.
+            # The guard is necessary to avoid doubling history size at
+            # each interpreter exit when readline was already configured
+            # see: http://bugs.python.org/issue5845#msg198636
+            try:
+                readline.read_history_file(config['HISTFILE'])
+            except IOError:
+                pass
+            atexit.register(readline.write_history_file,
+                            config['HISTFILE'])
         readline.set_history_length(config['HISTSIZE'])
-        atexit.register(partial(readline.write_history_file, config['HISTFILE']))
 
-        # - turn on tab completion
-        readline.parse_and_bind('tab: complete')
+        # - replace default completer
         readline.set_completer(self.improved_rlcompleter())
 
         # - enable auto-indenting
         readline.set_pre_input_hook(self.auto_indent_hook)
-
-        # - other useful stuff
-        try:
-            readline.read_init_file()
-        except IOError:
-            # An IOError here could have many causes, but the most likely one
-            # is that there's no .inputrc file (or .editrc file in the case of
-            # Mac OS X + libedit) in the expected location.  In that case, we
-            # want to ignore the exception.
-            # https://github.com/python/cpython/blob/master/Lib/site.py#L401-L449
-            pass
 
     def init_prompt(self):
         """Activates color on the prompt based on python version.
