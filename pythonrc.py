@@ -294,7 +294,7 @@ class ImprovedConsole(InteractiveConsole, object):
             offset = len(config['EDIT_CMD'])
             line = self.process_edit_cmd(line[offset:].strip())
         elif line.startswith(config['SH_EXEC']):
-            offset = len(config['EDIT_CMD'])
+            offset = len(config['SH_EXEC'])
             line = self.process_sh_cmd(line[offset:].strip())
         elif line.startswith(config['LIST_CMD']):
             # - strip off the possible tab-completed '('
