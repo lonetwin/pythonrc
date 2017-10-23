@@ -153,12 +153,13 @@ class ImprovedConsole(InteractiveConsole, object):
         """Populates globals dict with some helper functions for colorizing text
         """
         def colorize(color_code, text, bold=True, readline_workaround=False):
-            code_str = '1;{}'.format(color_code) if bold else color_code
+            reset = '\033[0m'
+            color = '\033[{0}{1}m'.format('1;' if bold else '', color_code)
             # - reason for readline_workaround: http://bugs.python.org/issue20359
             if readline_workaround:
-                return "\001\033[{}m\002{}\001\033[0m\002".format(code_str, text)
-            else:
-                return "\033[{}m{}\033[0m".format(code_str, text)
+                color = '\001{color}\002'.format(color=color)
+                reset = '\001{reset}\002'.format(reset=reset)
+            return "{color}{text}{reset}".format(**vars())
 
         g = globals()
         for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan'], 31):
@@ -167,33 +168,43 @@ class ImprovedConsole(InteractiveConsole, object):
     def init_readline(self):
         """Activates history and tab completion
         """
-        # - init history
+        # - mainly borrowed from site.enablerlcompleter() from py3.4+
+
+        # Reading the initialization (config) file may not be enough to set a
+        # completion key, so we set one first and then read the file.
+        readline_doc = getattr(readline, '__doc__', '')
+        if readline_doc is not None and 'libedit' in readline_doc:
+            readline.parse_and_bind('bind ^I rl_complete')
+        else:
+            readline.parse_and_bind('tab: complete')
+
         try:
-            readline.read_history_file(config['HISTFILE'])
-        except IOError:
-            # Probably .history file does not exist - ignoring exception
+            readline.read_init_file()
+        except OSError:
+            # An OSError here could have many causes, but the most likely one
+            # is that there's no .inputrc file (or .editrc file in the case of
+            # Mac OS X + libedit) in the expected location.  In that case, we
+            # want to ignore the exception.
             pass
 
+        if readline.get_current_history_length() == 0:
+            # If no history was loaded, default to .python_history.
+            # The guard is necessary to avoid doubling history size at
+            # each interpreter exit when readline was already configured
+            # see: http://bugs.python.org/issue5845#msg198636
+            try:
+                readline.read_history_file(config['HISTFILE'])
+            except IOError:
+                pass
+            atexit.register(readline.write_history_file,
+                            config['HISTFILE'])
         readline.set_history_length(config['HISTSIZE'])
-        atexit.register(partial(readline.write_history_file, config['HISTFILE']))
 
-        # - turn on tab completion
-        readline.parse_and_bind('tab: complete')
+        # - replace default completer
         readline.set_completer(self.improved_rlcompleter())
 
         # - enable auto-indenting
         readline.set_pre_input_hook(self.auto_indent_hook)
-
-        # - other useful stuff
-        try:
-            readline.read_init_file()
-        except IOError:
-            # An IOError here could have many causes, but the most likely one
-            # is that there's no .inputrc file (or .editrc file in the case of
-            # Mac OS X + libedit) in the expected location.  In that case, we
-            # want to ignore the exception.
-            # https://github.com/python/cpython/blob/master/Lib/site.py#L401-L449
-            pass
 
     def init_prompt(self):
         """Activates color on the prompt based on python version.
@@ -280,13 +291,16 @@ class ImprovedConsole(InteractiveConsole, object):
             print(cyan(self.__doc__).format(**config))
             line = ''
         elif line.startswith(config['EDIT_CMD']):
-            line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
+            offset = len(config['EDIT_CMD'])
+            line = self.process_edit_cmd(line[offset:].strip())
         elif line.startswith(config['SH_EXEC']):
-            line = self.process_sh_cmd(line.strip(config['SH_EXEC']))
+            offset = len(config['EDIT_CMD'])
+            line = self.process_sh_cmd(line[offset:].strip())
         elif line.startswith(config['LIST_CMD']):
             # - strip off the possible tab-completed '('
-            line = line.rstrip(config['LIST_CMD'] + '(')
-            line = self.process_list_cmd(line.strip(config['LIST_CMD']))
+            line = line.rstrip('(')
+            offset = len(config['LIST_CMD'])
+            line = self.process_list_cmd(line[offset:].strip())
         elif line.endswith(config['DOC_CMD']):
             if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
@@ -327,7 +341,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         more = super(ImprovedConsole, self).push(line)
         if more:
-            if line.endswith(":"):
+            if line[-1] in (":", '[', '{', '('):
                 self._indent += self.tab
         else:
             self._indent = ''
@@ -359,8 +373,7 @@ class ImprovedConsole(InteractiveConsole, object):
             arg = arg.strip()
             if arg.startswith('-h') or arg.startswith('--help'):
                 return self.writeline(blue(method.__doc__.strip().format(**config)))
-            else:
-                return method(self, arg)
+            return method(self, arg)
         return inner
 
     def _mktemp_buffer(self, lines):
@@ -452,7 +465,7 @@ class ImprovedConsole(InteractiveConsole, object):
           line using the `.format()` syntax. for example:
 
         >>> filename = '/does/not/exist'
-        >>> !ls {{{{filename}}}}
+        >>> !ls {{filename}}
         ls: cannot access /does/not/exist: No such file or directory
         >>> _
         CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
@@ -498,8 +511,8 @@ class ImprovedConsole(InteractiveConsole, object):
         except (IOError, TypeError, NameError) as e:
             self.writeline(e)
         else:
-            for line_no, line in enumerate(src_lines):
-                self.write(cyan("{0:03d}: {1}".format(offset + line_no + 1, line)))
+            for line_no, line in enumerate(src_lines, offset+1):
+                self.write(cyan("{0:03d}: {1}".format(line_no, line)))
 
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()

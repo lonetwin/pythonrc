@@ -53,6 +53,13 @@ class TestImprovedConsole(TestCase):
                       ]:
             method.assert_called_once()
 
+    @patch('pythonrc.readline')
+    def test_libedit_readline(self, mock_readline):
+        mock_readline.__doc__ = 'libedit'
+        pymp = pythonrc.ImprovedConsole()
+        mock_readline.parse_and_bind.assert_called_once_with(
+            'bind ^I rl_complete')
+
     def test_init_prompt(self):
         self.assertRegexpMatches(
             sys.ps1, '\001\033\[1;3[23]m\002>>> \001\033\[0m\002'
@@ -107,3 +114,24 @@ class TestImprovedConsole(TestCase):
         self.assertEqual(self.pymp._indent, '        ')
         self.pymp.push('')
         self.assertEqual(self.pymp._indent, '')
+
+    @patch.object(pythonrc.InteractiveConsole, 'raw_input',
+                  return_value='\e code')
+    def test_raw_input_edit_cmd(self, ignored):
+        with patch.object(self.pymp, 'process_edit_cmd') as mocked_cmd:
+            self.pymp.raw_input('\e code\n')
+            mocked_cmd.assert_called_once_with('code')
+
+    @patch.object(pythonrc.InteractiveConsole, 'raw_input',
+                  return_value='\l shutil')
+    def test_raw_input_list_cmd(self, ignored):
+        with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
+            self.pymp.raw_input('\l shutil\n')
+            mocked_cmd.assert_called_once_with('shutil')
+
+    @patch.object(pythonrc.InteractiveConsole, 'raw_input',
+                  return_value='\l global(')
+    def test_raw_input_list_cmd(self, ignored):
+        with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
+            self.pymp.raw_input('\l global(\n')
+            mocked_cmd.assert_called_once_with('global')
