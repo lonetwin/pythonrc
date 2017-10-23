@@ -380,8 +380,9 @@ class ImprovedConsole(InteractiveConsole, object):
             if not quiet:
                 self.write(cyan("... {}".format(stmt)))
             if not stripped.startswith('#'):
-                self.push(stripped)
-                readline.add_history(stripped)
+                line = stmt.strip('\n')
+                self.push(line)
+                readline.add_history(line)
             previous = stripped
 
     def lookup(self, name, namespace=None):
