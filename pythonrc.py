@@ -291,13 +291,16 @@ class ImprovedConsole(InteractiveConsole, object):
             print(cyan(self.__doc__).format(**config))
             line = ''
         elif line.startswith(config['EDIT_CMD']):
-            line = self.process_edit_cmd(line.strip(config['EDIT_CMD']))
+            offset = len(config['EDIT_CMD'])
+            line = self.process_edit_cmd(line[offset:].strip())
         elif line.startswith(config['SH_EXEC']):
-            line = self.process_sh_cmd(line.strip(config['SH_EXEC']))
+            offset = len(config['EDIT_CMD'])
+            line = self.process_sh_cmd(line[offset:].strip())
         elif line.startswith(config['LIST_CMD']):
             # - strip off the possible tab-completed '('
-            line = line.rstrip(config['LIST_CMD'] + '(')
-            line = self.process_list_cmd(line.strip(config['LIST_CMD']))
+            line = line.rstrip('(')
+            offset = len(config['LIST_CMD'])
+            line = self.process_list_cmd(line[offset:].strip())
         elif line.endswith(config['DOC_CMD']):
             if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
