@@ -4,7 +4,7 @@ import os
 import sys
 import tempfile
 
-from unittest import TestCase, skipIf
+from unittest import TestCase, skipIf, skipUnless
 
 try:
     from unittest.mock import patch
@@ -82,6 +82,25 @@ class TestImprovedConsole(TestCase):
                 ("%s\n" "{%s42}\n") % (pythonrc.blue('42'),
                                        pythonrc.purple("'spam': "))
             )
+
+    @skipUnless(sys.version_info.major >= 3 and sys.version_info.minor > 3,
+                'compact option does not exist for pprint in python < 3.3')
+    def test_pprint_compact(self):
+        with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+
+            # - test compact pprint-ing with 80x25 terminal
+            with patch.object(pythonrc.subprocess, 'check_output',
+                              return_value='25 80'):
+                sys.displayhook(list(range(22)))
+                self.assertIn('20, 21]', sys.stdout.getvalue())
+                sys.displayhook(list(range(23)))
+                self.assertIn('21,\n 22]', sys.stdout.getvalue())
+
+            # - test compact pprint-ing with resized 100x25 terminal
+            with patch.object(pythonrc.subprocess, 'check_output',
+                              return_value=('25 100')):
+                sys.displayhook(list(range(23)))
+                self.assertIn('21, 22]', sys.stdout.getvalue())
 
     def test_completer(self):
         completer = self.pymp.improved_rlcompleter()

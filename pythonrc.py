@@ -227,7 +227,7 @@ class ImprovedConsole(InteractiveConsole, object):
         keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
         color_dict = partial(keys_re.sub, lambda m: purple(m.group()))
         format_func = pprint.pformat
-        if sys.version_info.major > 3 and sys.version.minor > 3:
+        if sys.version_info.major >= 3 and sys.version_info.minor > 3:
             format_func = partial(pprint.pformat, compact=True)
 
         def pprint_callback(value):
