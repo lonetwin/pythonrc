@@ -138,19 +138,19 @@ class TestImprovedConsole(TestCase):
                   return_value='\e code')
     def test_raw_input_edit_cmd(self, ignored):
         with patch.object(self.pymp, 'process_edit_cmd') as mocked_cmd:
-            self.pymp.raw_input('\e code\n')
+            self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('code')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\l shutil')
     def test_raw_input_list_cmd(self, ignored):
         with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
-            self.pymp.raw_input('\l shutil\n')
+            self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('shutil')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\l global(')
     def test_raw_input_list_cmd(self, ignored):
         with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
-            self.pymp.raw_input('\l global(\n')
+            self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('global')

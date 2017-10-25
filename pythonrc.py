@@ -283,10 +283,10 @@ class ImprovedConsole(InteractiveConsole, object):
         readline.insert_text(self._indent)
         readline.redisplay()
 
-    def raw_input(self, *args):
+    def raw_input(self, prompt=''):
         """Read the input and delegate if necessary.
         """
-        line = InteractiveConsole.raw_input(self, *args)
+        line = InteractiveConsole.raw_input(self, prompt)
         if line == config['HELP_CMD']:
             print(cyan(self.__doc__).format(**config))
             line = ''
