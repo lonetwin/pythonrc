@@ -154,3 +154,14 @@ class TestImprovedConsole(TestCase):
         with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('global')
+
+    def test_increase_indent(self):
+        for count, char in enumerate(['if True:', '\t[', '{', '('], 1):
+            self.pymp.push(char)
+            self.assertEqual(self.pymp._indent, self.pymp.tab*count)
+
+    def test_donot_crash_on_empty_continuation(self):
+        self.pymp.push('if True:')
+        self.assertEqual(self.pymp._indent, self.pymp.tab)
+        self.pymp.push('')
+        self.assertEqual(self.pymp._indent, self.pymp.tab)

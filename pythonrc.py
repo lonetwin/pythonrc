@@ -263,7 +263,7 @@ class ImprovedConsole(InteractiveConsole, object):
             if line == '':
                 return None if state > 0 else self.tab
             if state == 0:
-                if line.startswith('import') or line.startswith('from'):
+                if line.startswith(('import', 'from')):
                     completer.matches = [name for name in modlist if name.startswith(text)]
                 else:
                     match = completer.complete(text, state)
@@ -341,7 +341,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         more = super(ImprovedConsole, self).push(line)
         if more:
-            if line[-1] in (":", '[', '{', '('):
+            if line.endswith((":", '[', '{', '(')):
                 self._indent += self.tab
         else:
             self._indent = ''
@@ -371,7 +371,7 @@ class ImprovedConsole(InteractiveConsole, object):
     def _doc_to_usage(method):
         def inner(self, arg):
             arg = arg.strip()
-            if arg.startswith('-h') or arg.startswith('--help'):
+            if arg.startswith(('-h', '--help')):
                 return self.writeline(blue(method.__doc__.strip().format(**config)))
             return method(self, arg)
         return inner
