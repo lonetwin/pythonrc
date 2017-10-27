@@ -28,6 +28,7 @@ class TestImprovedConsole(TestCase):
     def setUp(self):
         _, pythonrc.config['HISTFILE'] = tempfile.mkstemp()
         self.pymp = pythonrc.ImprovedConsole()
+        pythonrc.config['EDITOR'] = 'vi'
 
     def test_init(self):
         self.assertEqual(self.pymp.session_history, [])
@@ -143,14 +144,14 @@ class TestImprovedConsole(TestCase):
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\l shutil')
-    def test_raw_input_list_cmd(self, ignored):
+    def test_raw_input_list_cmd0(self, ignored):
         with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('shutil')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\l global(')
-    def test_raw_input_list_cmd(self, ignored):
+    def test_raw_input_list_cmd1(self, ignored):
         with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('global')
@@ -165,3 +166,32 @@ class TestImprovedConsole(TestCase):
         self.assertEqual(self.pymp._indent, self.pymp.tab)
         self.pymp.push('')
         self.assertEqual(self.pymp._indent, self.pymp.tab)
+
+    @patch.object(pythonrc.ImprovedConsole, 'lookup',
+                  return_value=pythonrc.ImprovedConsole)
+    def test_edit_cmd0(self, *ignored):
+        """Test edit object"""
+        with patch.object(pythonrc.os, 'system') as mocked_system:
+            self.pymp.process_edit_cmd('pythonrc.ImprovedConsole')
+            self.assertRegexpMatches(mocked_system.call_args[0][0],
+                                     r'vi \+\d+ .*pythonrc.py')
+
+    @patch.object(pythonrc.ImprovedConsole, 'lookup', return_value=None)
+    def test_edit_cmd1(self, *ignored):
+        """Test edit file"""
+        with patch.object(pythonrc.os, 'system') as mocked_system:
+            self.pymp.process_edit_cmd('/path/to/file')
+            self.assertRegexpMatches(mocked_system.call_args[0][0],
+                                     r'vi  /path/to/file')
+
+    @patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
+                  return_value='/tmp/dummy')
+    def test_edit_cmd2(self, *ignored):
+        """Test edit session"""
+        with patch.object(pythonrc.os, 'system') as mocked_system, \
+             patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
+             patch.object(self.pymp, '_exec_from_file') as mocked_exec:
+            self.pymp.process_edit_cmd('')
+            mocked_system.assert_called_once_with('vi  /tmp/dummy')
+            mocked_exec.assert_called_once_with('/tmp/dummy')
+            mocked_unlink.assert_called_once_with('/tmp/dummy')

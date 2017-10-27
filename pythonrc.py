@@ -95,7 +95,11 @@ config = dict(
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
     HELP_CMD = '\h',
     LIST_CMD = '\l',
-    VENV_RC  = ".venv_rc.py"
+    VENV_RC  = ".venv_rc.py",
+    # - option to pass to the editor for open file at `line_no`. This is
+    # use when the EDIT_CMD is invoked with a python object to open the
+    # source file for the object.
+    LINE_NUM_OPT = "+{line_no}"
 )
 
 
@@ -291,6 +295,7 @@ class ImprovedConsole(InteractiveConsole, object):
             print(cyan(self.__doc__).format(**config))
             line = ''
         elif line.startswith(config['EDIT_CMD']):
+            line = line.rstrip('(')
             offset = len(config['EDIT_CMD'])
             line = self.process_edit_cmd(line[offset:].strip())
         elif line.startswith(config['SH_EXEC']):
@@ -426,10 +431,17 @@ class ImprovedConsole(InteractiveConsole, object):
           source file of the object and it is opened if found. Else the
           argument is treated as a filename.
         """
+        line_num_opt = ''
         if arg:
             obj = self.lookup(arg)
             try:
-                filename = inspect.getsourcefile(obj) if obj else arg
+                if obj:
+                    filename = inspect.getsourcefile(obj)
+                    _, line_no = inspect.getsourcelines(obj)
+                    line_num_opt = config['LINE_NUM_OPT'].format(line_no=line_no)
+                else:
+                    filename = arg
+
             except (IOError, TypeError, NameError) as e:
                 return self.writeline(e)
         else:
@@ -439,7 +451,7 @@ class ImprovedConsole(InteractiveConsole, object):
                                            for line in (line.strip('\n') for line in self.session_history))
 
         # - shell out to the editor
-        os.system('{} {}'.format(config['EDITOR'], filename))
+        os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
 
         # - if arg was not provided (we edited session history), execute
         # it in the current namespace
