@@ -39,10 +39,10 @@ provides:
   * colored prompts and pretty printing
   * auto-indentation
   * intelligent tab completion [#]_
-  
+
     - without preceding text four spaces
     - with preceding text
-  
+
       + names in the current namespace
       + for objects, their attributes/methods
       + for strings with a `/`, pathname completion
@@ -62,6 +62,7 @@ provides:
   * auto-execution of a virtual env specific (`.venv_rc.py`) file at startup
 
 If you have any other good ideas please feel free to submit pull requests or issues.
+There's an section below which shows you how to add new commands.
 
 
 Configuration
@@ -100,6 +101,79 @@ following::
     "\e[A": history-search-backward
     "\e[B": history-search-forward
 
+
+Adding new commands
+===================
+
+It is relatively simple to add new commands to the `ImprovedConsole` class:
+
+1. Add the string that would invoke your new command to the `config` dict.
+2. Create a method in the `ImprovedConsole` class which receives a string
+   argument and returns either a string that can be evaluated as a python
+   expression or `None`. The method may do anything it fancies.
+3. Add an entry mapping the command to the method in the `commands` dict.
+
+That's all !
+
+The way commands work is, the text entered at the prompt is examined against the
+`commands_re` regular expression. This regular expression is simply the grouping
+of all valid commands, obtained from the keys of the `commands` dict.
+
+If a match is found the corresponding function from the `commands` dict is
+called with the rest of the text following the command provided as the argument
+to the function.
+
+You may choose to resolve this string argument to an object in the session
+namespace by using the helper function `lookup()`.
+
+Whatever text is returned by the function is then passed on for further
+evaluation by the python interpreter.
+
+Various helper functions exist like all the globally defined color functions
+(initialized by the `init_colors` method), the `_doc_to_usage` decorator,
+`_mktemp_buffer` and `_exec_from_file` whose intent ought to be hopefully
+obvious.
+
+Here's a complete example demonstrating the idea, by specifying a new command
+``\s`` which prints the size of the specified object or of all objects in the
+current namespace.
+
+```
+    config = dict(
+        ...
+        SIZE_OF = '\s',
+    )
+    ...
+
+    class ImprovedConsole(...)
+        ...
+
+        def __init__(...):
+           ...
+           self.commands = {
+               ...
+               config['SIZE_OF']: self.print_sizeof,
+               ...
+           }
+        ...
+
+
+        @_doc_to_usage
+        def print_sizeof(self, arg=''):
+            """{SIZE_OF} <object>
+
+            Print the size of specified object or of all objects in current
+            namespace
+            """
+            if arg:
+                obj = self.lookup(arg)
+                if obj:
+                    return print(sys.getsizeof(obj))
+                else:
+                    return self.print_sizeof('-h')
+            print({k: sys.getsizeof(v) for k, v in self.locals.items()})
+
+```
 
 A little history
 ================

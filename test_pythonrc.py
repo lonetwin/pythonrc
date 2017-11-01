@@ -7,9 +7,9 @@ import tempfile
 from unittest import TestCase, skipIf, skipUnless
 
 try:
-    from unittest.mock import patch
+    from unittest.mock import patch, Mock
 except ImportError:
-    from mock import patch
+    from mock import patch, Mock
 
 try:
     from StringIO import StringIO
@@ -29,6 +29,8 @@ class TestImprovedConsole(TestCase):
         _, pythonrc.config['HISTFILE'] = tempfile.mkstemp()
         self.pymp = pythonrc.ImprovedConsole()
         pythonrc.config['EDITOR'] = 'vi'
+        pythonrc.config['EDIT_CMD'] = '\e'
+        pythonrc.config['LIST_CMD'] = '\l'
 
     def test_init(self):
         self.assertEqual(self.pymp.session_history, [])
@@ -138,21 +140,24 @@ class TestImprovedConsole(TestCase):
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\e code')
     def test_raw_input_edit_cmd(self, ignored):
-        with patch.object(self.pymp, 'process_edit_cmd') as mocked_cmd:
+        mocked_cmd = Mock()
+        with patch.dict(self.pymp.commands, {'\e': mocked_cmd}):
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('code')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\l shutil')
     def test_raw_input_list_cmd0(self, ignored):
-        with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
-            self.pymp.raw_input('>>> ')
+        mocked_cmd = Mock()
+        with patch.dict(self.pymp.commands, {'\l': mocked_cmd}):
+            ret = self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('shutil')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
-                  return_value='\l global(')
+                  return_value='\l global')
     def test_raw_input_list_cmd1(self, ignored):
-        with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
+        mocked_cmd = Mock()
+        with patch.dict(self.pymp.commands, {'\l': mocked_cmd}):
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('global')
 

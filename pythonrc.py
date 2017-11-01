@@ -96,10 +96,10 @@ config = dict(
     HELP_CMD = '\h',
     LIST_CMD = '\l',
     VENV_RC  = ".venv_rc.py",
-    # - option to pass to the editor for open file at `line_no`. This is
-    # use when the EDIT_CMD is invoked with a python object to open the
-    # source file for the object.
-    LINE_NUM_OPT = "+{line_no}"
+    # - option to pass to the editor to open a file at a specific
+    # `line_no`. This is used when the EDIT_CMD is invoked with a python
+    # object to open the source file for the object.
+    LINE_NUM_OPT = "+{line_no}",
 )
 
 
@@ -152,6 +152,17 @@ class ImprovedConsole(InteractiveConsole, object):
         self.init_readline()
         self.init_prompt()
         self.init_pprint()
+        # - dict mapping commands to respective handler methods
+        self.commands = {
+            config['EDIT_CMD']: self.process_edit_cmd,
+            config['LIST_CMD']: self.process_list_cmd,
+            config['SH_EXEC']: self.process_sh_cmd,
+            config['HELP_CMD']: self.process_help_cmd,
+        }
+        self.commands_re = re.compile(
+            r'({})\s*([^(]*)[\s(]*'.format(
+                '|'.join(re.escape(cmd) for cmd in self.commands.keys())
+            ))
 
     def init_color_functions(self):
         """Populates globals dict with some helper functions for colorizing text
@@ -291,21 +302,10 @@ class ImprovedConsole(InteractiveConsole, object):
         """Read the input and delegate if necessary.
         """
         line = InteractiveConsole.raw_input(self, prompt)
-        if line == config['HELP_CMD']:
-            print(cyan(self.__doc__).format(**config))
-            line = ''
-        elif line.startswith(config['EDIT_CMD']):
-            line = line.rstrip('(')
-            offset = len(config['EDIT_CMD'])
-            line = self.process_edit_cmd(line[offset:].strip())
-        elif line.startswith(config['SH_EXEC']):
-            offset = len(config['SH_EXEC'])
-            line = self.process_sh_cmd(line[offset:].strip())
-        elif line.startswith(config['LIST_CMD']):
-            # - strip off the possible tab-completed '('
-            line = line.rstrip('(')
-            offset = len(config['LIST_CMD'])
-            line = self.process_list_cmd(line[offset:].strip())
+        matches = self.commands_re.match(line)
+        if matches:
+            command, args = matches.groups()
+            line = self.commands[command](args)
         elif line.endswith(config['DOC_CMD']):
             if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
@@ -512,8 +512,7 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_list_cmd(self, arg):
-        """
-        {LIST_CMD} <object> - List source code for object, if possible.
+        """{LIST_CMD} <object> - List source code for object, if possible.
         """
         try:
             if not arg:
@@ -525,6 +524,9 @@ class ImprovedConsole(InteractiveConsole, object):
         else:
             for line_no, line in enumerate(src_lines, offset+1):
                 self.write(cyan("{0:03d}: {1}".format(line_no, line)))
+
+    def process_help_cmd(self, arg=''):
+        print(cyan(self.__doc__).format(**config))
 
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
