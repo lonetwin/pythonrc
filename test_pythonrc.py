@@ -4,12 +4,12 @@ import os
 import sys
 import tempfile
 
-from unittest import TestCase, skipIf
+from unittest import TestCase, skipIf, skipUnless
 
 try:
-    from unittest.mock import patch
+    from unittest.mock import patch, Mock
 except ImportError:
-    from mock import patch
+    from mock import patch, Mock
 
 try:
     from StringIO import StringIO
@@ -28,6 +28,9 @@ class TestImprovedConsole(TestCase):
     def setUp(self):
         _, pythonrc.config['HISTFILE'] = tempfile.mkstemp()
         self.pymp = pythonrc.ImprovedConsole()
+        pythonrc.config['EDITOR'] = 'vi'
+        pythonrc.config['EDIT_CMD'] = '\e'
+        pythonrc.config['LIST_CMD'] = '\l'
 
     def test_init(self):
         self.assertEqual(self.pymp.session_history, [])
@@ -83,6 +86,25 @@ class TestImprovedConsole(TestCase):
                                        pythonrc.purple("'spam': "))
             )
 
+    @skipUnless(sys.version_info.major >= 3 and sys.version_info.minor > 3,
+                'compact option does not exist for pprint in python < 3.3')
+    def test_pprint_compact(self):
+        with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+
+            # - test compact pprint-ing with 80x25 terminal
+            with patch.object(pythonrc.subprocess, 'check_output',
+                              return_value='25 80'):
+                sys.displayhook(list(range(22)))
+                self.assertIn('20, 21]', sys.stdout.getvalue())
+                sys.displayhook(list(range(23)))
+                self.assertIn('21,\n 22]', sys.stdout.getvalue())
+
+            # - test compact pprint-ing with resized 100x25 terminal
+            with patch.object(pythonrc.subprocess, 'check_output',
+                              return_value=('25 100')):
+                sys.displayhook(list(range(23)))
+                self.assertIn('21, 22]', sys.stdout.getvalue())
+
     def test_completer(self):
         completer = self.pymp.improved_rlcompleter()
         rl = pythonrc.readline
@@ -118,20 +140,86 @@ class TestImprovedConsole(TestCase):
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\e code')
     def test_raw_input_edit_cmd(self, ignored):
-        with patch.object(self.pymp, 'process_edit_cmd') as mocked_cmd:
-            self.pymp.raw_input('\e code\n')
+        mocked_cmd = Mock()
+        with patch.dict(self.pymp.commands, {'\e': mocked_cmd}):
+            self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('code')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
                   return_value='\l shutil')
-    def test_raw_input_list_cmd(self, ignored):
-        with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
-            self.pymp.raw_input('\l shutil\n')
+    def test_raw_input_list_cmd0(self, ignored):
+        mocked_cmd = Mock()
+        with patch.dict(self.pymp.commands, {'\l': mocked_cmd}):
+            ret = self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('shutil')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
-                  return_value='\l global(')
-    def test_raw_input_list_cmd(self, ignored):
-        with patch.object(self.pymp, 'process_list_cmd') as mocked_cmd:
-            self.pymp.raw_input('\l global(\n')
+                  return_value='\l global')
+    def test_raw_input_list_cmd1(self, ignored):
+        mocked_cmd = Mock()
+        with patch.dict(self.pymp.commands, {'\l': mocked_cmd}):
+            self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('global')
+
+    def test_increase_indent(self):
+        for count, char in enumerate(['if True:', '\t[', '{', '('], 1):
+            self.pymp.push(char)
+            self.assertEqual(self.pymp._indent, self.pymp.tab*count)
+
+    def test_donot_crash_on_empty_continuation(self):
+        self.pymp.push('if True:')
+        self.assertEqual(self.pymp._indent, self.pymp.tab)
+        self.pymp.push('')
+        self.assertEqual(self.pymp._indent, self.pymp.tab)
+
+    @patch.object(pythonrc.ImprovedConsole, 'lookup',
+                  return_value=pythonrc.ImprovedConsole)
+    def test_edit_cmd0(self, *ignored):
+        """Test edit object"""
+        with patch.object(pythonrc.os, 'system') as mocked_system:
+            self.pymp.process_edit_cmd('pythonrc.ImprovedConsole')
+            self.assertRegexpMatches(mocked_system.call_args[0][0],
+                                     r'vi \+\d+ .*pythonrc.py')
+
+    @patch.object(pythonrc.ImprovedConsole, 'lookup', return_value=None)
+    def test_edit_cmd1(self, *ignored):
+        """Test edit file"""
+        with patch.object(pythonrc.os, 'system') as mocked_system:
+            self.pymp.process_edit_cmd('/path/to/file')
+            self.assertRegexpMatches(mocked_system.call_args[0][0],
+                                     r'vi  /path/to/file')
+
+    @patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
+                  return_value='/tmp/dummy')
+    def test_edit_cmd2(self, *ignored):
+        """Test edit session"""
+        with patch.object(pythonrc.os, 'system') as mocked_system, \
+             patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
+             patch.object(self.pymp, '_exec_from_file') as mocked_exec:
+            self.pymp.process_edit_cmd('')
+            mocked_system.assert_called_once_with('vi  /tmp/dummy')
+            mocked_exec.assert_called_once_with('/tmp/dummy')
+            mocked_unlink.assert_called_once_with('/tmp/dummy')
+
+    def test_sh_exec0(self):
+        """Test sh exec with command and argument"""
+        self.pymp.locals['path'] = "/dummy/location"
+        with patch('pythonrc.subprocess.Popen') as mocked_popen:
+            mocked_popen.return_value.communicate = Mock(return_value=('foo', 'bar'))
+            mocked_popen.return_value.returncode = 0
+            self.pymp.process_sh_cmd('ls -l {path}')
+            mocked_popen.assert_called_once_with(
+                ['ls', '-l', '/dummy/location'],
+                stdout=pythonrc.subprocess.PIPE,
+                stderr=pythonrc.subprocess.PIPE
+            )
+            mocked_popen.return_value.communicate.assert_called_once_with()
+
+    @patch.object(pythonrc.os, 'chdir')
+    def test_sh_exec1(self, mocked_chdir):
+        """Test sh exec with cd, user home and shell variable"""
+        self.pymp.locals['path'] = "~/${RUNTIME}/location"
+        with patch.dict(pythonrc.os.environ, {'RUNTIME': 'dummy',
+                                              'HOME': '/home/me/'}):
+            self.pymp.process_sh_cmd('cd {path}')
+            mocked_chdir.assert_called_once_with('/home/me/dummy/location')

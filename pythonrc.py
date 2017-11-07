@@ -95,7 +95,11 @@ config = dict(
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
     HELP_CMD = '\h',
     LIST_CMD = '\l',
-    VENV_RC  = ".venv_rc.py"
+    VENV_RC  = ".venv_rc.py",
+    # - option to pass to the editor to open a file at a specific
+    # `line_no`. This is used when the EDIT_CMD is invoked with a python
+    # object to open the source file for the object.
+    LINE_NUM_OPT = "+{line_no}",
 )
 
 
@@ -148,6 +152,17 @@ class ImprovedConsole(InteractiveConsole, object):
         self.init_readline()
         self.init_prompt()
         self.init_pprint()
+        # - dict mapping commands to respective handler methods
+        self.commands = {
+            config['EDIT_CMD']: self.process_edit_cmd,
+            config['LIST_CMD']: self.process_list_cmd,
+            config['SH_EXEC']: self.process_sh_cmd,
+            config['HELP_CMD']: self.process_help_cmd,
+        }
+        self.commands_re = re.compile(
+            r'({})\s*([^(]*)[\s(]*'.format(
+                '|'.join(re.escape(cmd) for cmd in self.commands.keys())
+            ))
 
     def init_color_functions(self):
         """Populates globals dict with some helper functions for colorizing text
@@ -227,7 +242,7 @@ class ImprovedConsole(InteractiveConsole, object):
         keys_re = re.compile(r'([\'\("]+(.*?[\'\)"]: ))+?')
         color_dict = partial(keys_re.sub, lambda m: purple(m.group()))
         format_func = pprint.pformat
-        if sys.version_info.major > 3 and sys.version.minor > 3:
+        if sys.version_info.major >= 3 and sys.version_info.minor > 3:
             format_func = partial(pprint.pformat, compact=True)
 
         def pprint_callback(value):
@@ -263,7 +278,7 @@ class ImprovedConsole(InteractiveConsole, object):
             if line == '':
                 return None if state > 0 else self.tab
             if state == 0:
-                if line.startswith('import') or line.startswith('from'):
+                if line.startswith(('import', 'from')):
                     completer.matches = [name for name in modlist if name.startswith(text)]
                 else:
                     match = completer.complete(text, state)
@@ -283,24 +298,14 @@ class ImprovedConsole(InteractiveConsole, object):
         readline.insert_text(self._indent)
         readline.redisplay()
 
-    def raw_input(self, *args):
+    def raw_input(self, prompt=''):
         """Read the input and delegate if necessary.
         """
-        line = InteractiveConsole.raw_input(self, *args)
-        if line == config['HELP_CMD']:
-            print(cyan(self.__doc__).format(**config))
-            line = ''
-        elif line.startswith(config['EDIT_CMD']):
-            offset = len(config['EDIT_CMD'])
-            line = self.process_edit_cmd(line[offset:].strip())
-        elif line.startswith(config['SH_EXEC']):
-            offset = len(config['SH_EXEC'])
-            line = self.process_sh_cmd(line[offset:].strip())
-        elif line.startswith(config['LIST_CMD']):
-            # - strip off the possible tab-completed '('
-            line = line.rstrip('(')
-            offset = len(config['LIST_CMD'])
-            line = self.process_list_cmd(line[offset:].strip())
+        line = InteractiveConsole.raw_input(self, prompt)
+        matches = self.commands_re.match(line)
+        if matches:
+            command, args = matches.groups()
+            line = self.commands[command](args)
         elif line.endswith(config['DOC_CMD']):
             if line.endswith(config['DOC_CMD']*2):
                 # search for line in online docs
@@ -341,7 +346,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         more = super(ImprovedConsole, self).push(line)
         if more:
-            if line[-1] in (":", '[', '{', '('):
+            if line.endswith((":", '[', '{', '(')):
                 self._indent += self.tab
         else:
             self._indent = ''
@@ -371,7 +376,7 @@ class ImprovedConsole(InteractiveConsole, object):
     def _doc_to_usage(method):
         def inner(self, arg):
             arg = arg.strip()
-            if arg.startswith('-h') or arg.startswith('--help'):
+            if arg.startswith(('-h', '--help')):
                 return self.writeline(blue(method.__doc__.strip().format(**config)))
             return method(self, arg)
         return inner
@@ -426,10 +431,17 @@ class ImprovedConsole(InteractiveConsole, object):
           source file of the object and it is opened if found. Else the
           argument is treated as a filename.
         """
+        line_num_opt = ''
         if arg:
             obj = self.lookup(arg)
             try:
-                filename = inspect.getsourcefile(obj) if obj else arg
+                if obj:
+                    filename = inspect.getsourcefile(obj)
+                    _, line_no = inspect.getsourcelines(obj)
+                    line_num_opt = config['LINE_NUM_OPT'].format(line_no=line_no)
+                else:
+                    filename = arg
+
             except (IOError, TypeError, NameError) as e:
                 return self.writeline(e)
         else:
@@ -439,7 +451,7 @@ class ImprovedConsole(InteractiveConsole, object):
                                            for line in (line.strip('\n') for line in self.session_history))
 
         # - shell out to the editor
-        os.system('{} {}'.format(config['EDITOR'], filename))
+        os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
 
         # - if arg was not provided (we edited session history), execute
         # it in the current namespace
@@ -500,8 +512,7 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_list_cmd(self, arg):
-        """
-        {LIST_CMD} <object> - List source code for object, if possible.
+        """{LIST_CMD} <object> - List source code for object, if possible.
         """
         try:
             if not arg:
@@ -513,6 +524,9 @@ class ImprovedConsole(InteractiveConsole, object):
         else:
             for line_no, line in enumerate(src_lines, offset+1):
                 self.write(cyan("{0:03d}: {1}".format(line_no, line)))
+
+    def process_help_cmd(self, arg=''):
+        print(cyan(self.__doc__).format(**config))
 
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
