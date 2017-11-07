@@ -200,3 +200,26 @@ class TestImprovedConsole(TestCase):
             mocked_system.assert_called_once_with('vi  /tmp/dummy')
             mocked_exec.assert_called_once_with('/tmp/dummy')
             mocked_unlink.assert_called_once_with('/tmp/dummy')
+
+    def test_sh_exec0(self):
+        """Test sh exec with command and argument"""
+        self.pymp.locals['path'] = "/dummy/location"
+        with patch('pythonrc.subprocess.Popen') as mocked_popen:
+            mocked_popen.return_value.communicate = Mock(return_value=('foo', 'bar'))
+            mocked_popen.return_value.returncode = 0
+            self.pymp.process_sh_cmd('ls -l {path}')
+            mocked_popen.assert_called_once_with(
+                ['ls', '-l', '/dummy/location'],
+                stdout=pythonrc.subprocess.PIPE,
+                stderr=pythonrc.subprocess.PIPE
+            )
+            mocked_popen.return_value.communicate.assert_called_once_with()
+
+    @patch.object(pythonrc.os, 'chdir')
+    def test_sh_exec1(self, mocked_chdir):
+        """Test sh exec with cd, user home and shell variable"""
+        self.pymp.locals['path'] = "~/${RUNTIME}/location"
+        with patch.dict(pythonrc.os.environ, {'RUNTIME': 'dummy',
+                                              'HOME': '/home/me/'}):
+            self.pymp.process_sh_cmd('cd {path}')
+            mocked_chdir.assert_called_once_with('/home/me/dummy/location')
