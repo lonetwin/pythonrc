@@ -138,7 +138,7 @@ Here's a complete example demonstrating the idea, by specifying a new command
 ``\s`` which prints the size of the specified object or of all objects in the
 current namespace.
 
-```
+::
     config = dict(
         ...
         SIZE_OF = '\s',
@@ -173,7 +173,6 @@ current namespace.
                     return self.print_sizeof('-h')
             print({k: sys.getsizeof(v) for k, v in self.locals.items()})
 
-```
 
 A little history
 ================
