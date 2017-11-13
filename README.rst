@@ -139,6 +139,7 @@ Here's a complete example demonstrating the idea, by specifying a new command
 current namespace.
 
 ::
+
     config = dict(
         ...
         SIZE_OF = '\s',
