@@ -22,6 +22,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# Keep a copy of the initial namespace, we'll need it later
+CLEAN_NS = globals().copy()
+
 """pymp - lonetwin's pimped-up pythonrc
 
 This file will be executed when the Python interactive shell is started, if
@@ -60,6 +63,7 @@ try:
     import builtins
 except ImportError:
     import __builtin__ as builtins
+
 import atexit
 import glob
 import inspect
@@ -571,5 +575,5 @@ class ImprovedConsole(InteractiveConsole, object):
 
 if not os.getenv('SKIP_PYMP'):
     # - create our pimped out console and fire it up !
-    pymp = ImprovedConsole()
+    pymp = ImprovedConsole(locals=CLEAN_NS)
     pymp.interact()
