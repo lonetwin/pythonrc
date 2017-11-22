@@ -156,7 +156,7 @@ class ImprovedConsole(InteractiveConsole, object):
         self.init_readline()
         self.init_prompt()
         self.init_pprint()
-        # - dict mapping commands to respective handler methods
+        # - dict mapping commands to their handler methods
         self.commands = {
             config['EDIT_CMD']: self.process_edit_cmd,
             config['LIST_CMD']: self.process_list_cmd,
@@ -164,7 +164,7 @@ class ImprovedConsole(InteractiveConsole, object):
             config['HELP_CMD']: self.process_help_cmd,
         }
         self.commands_re = re.compile(
-            r'({})\s*([^(]*)[\s(]*'.format(
+            r'({})\s*([^(]*)'.format(
                 '|'.join(re.escape(cmd) for cmd in self.commands.keys())
             ))
 
