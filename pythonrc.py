@@ -66,6 +66,8 @@ except ImportError:
 
 import atexit
 import glob
+import imp
+import importlib
 import inspect
 import keyword
 import os
@@ -163,6 +165,7 @@ class ImprovedConsole(InteractiveConsole, object):
             config['SH_EXEC']: self.process_sh_cmd,
             config['HELP_CMD']: self.process_help_cmd,
         }
+        # - regex to identify and extract commands and their arguments
         self.commands_re = re.compile(
             r'({})\s*([^(]*)'.format(
                 '|'.join(re.escape(cmd) for cmd in self.commands.keys())
@@ -275,19 +278,46 @@ class ImprovedConsole(InteractiveConsole, object):
         completer = rlcompleter.Completer(namespace=self.locals)
         # - remove / from the delimiters to help identify possibility for path completion
         readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
-        modlist = frozenset(name for _, name, _ in pkgutil.iter_modules())
+        pkglist, modlist = [], []
+        for _, name, ispkg in pkgutil.iter_modules():
+            modlist.append(name)
+            if ispkg:
+                pkglist.append(name)
+        pkglist, modlist = frozenset(pkglist), frozenset(modlist)
+
+        startswith_filter = lambda text, names: [name for name in names if name.startswith(text)]
 
         def complete_wrapper(text, state):
-            line = readline.get_line_buffer().strip()
-            if line == '':
-                return None if state > 0 else self.tab
-            if state == 0:
-                if line.startswith(('import', 'from')):
-                    completer.matches = [name for name in modlist if name.startswith(text)]
+            line = readline.get_line_buffer()
+            if line == '' or line.isspace():
+                return self.tab
+            if state == 0 and line.startswith(('from ', 'import ')):
+                words = line.split()
+                if words[0] == 'from' and len(words) >= 2 and 'import'.startswith(text):
+                    completer.matches = ['import']
                 else:
-                    match = completer.complete(text, state)
-                    if match is None and '/' in text:
-                        completer.matches = glob.glob(text+'*')
+                    completer.matches = startswith_filter(text, modlist)
+
+                if len(words) == 2 and '.' in text:
+                    pkg = text.split('.', 1)[0]
+                    _, pkg_path, _ = imp.find_module(pkg)
+                    names = (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
+                    completer.matches = startswith_filter(text, names)
+                elif len(words) >= 3 and words[2] == 'import':
+                    pkg = words[1].split('.', 1)[0]
+                    mod = pkg.split('.', 1)[0]
+                    if mod in pkglist:
+                        _, mod_path, _ = imp.find_module(mod)
+                        completer.matches = [
+                            name[len(pkg)+1:] for _, name, _ in pkgutil.walk_packages([mod_path], '{}.'.format(mod))
+                            if name.startswith('{}.{}'.format(pkg, text))
+                        ]
+                    else:
+                        completer.matches = startswith_filter(text, dir(importlib.import_module(pkg)))
+            else:
+                match = completer.complete(text, state)
+                if match is None and '/' in text:
+                    completer.matches = glob.glob(text+'*')
             try:
                 match = completer.matches[state]
                 return '{}{}'.format(match, ' ' if keyword.iskeyword(match) else '')
