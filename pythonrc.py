@@ -287,6 +287,10 @@ class ImprovedConsole(InteractiveConsole, object):
 
         startswith_filter = lambda text, names: [name for name in names if name.startswith(text)]
 
+        def get_pkg_matches(pkg):
+            _, pkg_path, _ = imp.find_module(pkg)
+            return (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
+
         def complete_wrapper(text, state):
             line = readline.get_line_buffer()
             if line == '' or line.isspace():
@@ -300,20 +304,24 @@ class ImprovedConsole(InteractiveConsole, object):
 
                 if len(words) == 2 and '.' in text:
                     pkg = text.split('.', 1)[0]
-                    _, pkg_path, _ = imp.find_module(pkg)
-                    names = (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
-                    completer.matches = startswith_filter(text, names)
+                    completer.matches = startswith_filter(
+                        text, (get_pkg_matches(pkg) if pkg in pkglist else modlist)
+                    )
                 elif len(words) >= 3 and words[2] == 'import':
                     pkg = words[1].split('.', 1)[0]
-                    mod = pkg.split('.', 1)[0]
-                    if mod in pkglist:
-                        _, mod_path, _ = imp.find_module(mod)
+                    if pkg in pkglist:
                         completer.matches = [
-                            name[len(pkg)+1:] for _, name, _ in pkgutil.walk_packages([mod_path], '{}.'.format(mod))
-                            if name.startswith('{}.{}'.format(pkg, text))
+                            name[len(words[1])+1:]
+                            for name in get_pkg_matches(pkg)
+                            if name.startswith('{}.{}'.format(words[1], text))
                         ]
-                    else:
-                        completer.matches = startswith_filter(text, dir(importlib.import_module(pkg)))
+                        if not completer.matches:
+                            mod = importlib.import_module(words[1])
+                            completer.matches = [
+                                name for name in startswith_filter(
+                                    text, getattr(mod, '__all__', dir(mod))
+                                ) if not name.startswith('_')
+                            ]
             else:
                 match = completer.complete(text, state)
                 if match is None and '/' in text:
