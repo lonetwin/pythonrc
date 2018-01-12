@@ -297,31 +297,31 @@ class ImprovedConsole(InteractiveConsole, object):
                 return self.tab
             if state == 0 and line.startswith(('from ', 'import ')):
                 words = line.split()
-                if words[0] == 'from' and len(words) >= 2 and 'import'.startswith(text):
-                    completer.matches = ['import']
-                else:
-                    completer.matches = startswith_filter(text, modlist)
-
-                if len(words) == 2 and '.' in text:
+                if len(words) <= 2:
                     pkg = text.split('.', 1)[0]
                     completer.matches = startswith_filter(
                         text, (get_pkg_matches(pkg) if pkg in pkglist else modlist)
                     )
-                elif len(words) >= 3 and words[2] == 'import':
+
+                if len(words) >= 2 and words[0] == 'from' and 'import'.startswith(text):
+                    completer.matches = ['import']
+
+                if len(words) >= 3 and words[2] == 'import':
+                    completer.matches = []
                     pkg = words[1].split('.', 1)[0]
                     if pkg in pkglist:
                         completer.matches = [
                             name[len(words[1])+1:]
-                            for name in get_pkg_matches(pkg)
-                            if name.startswith('{}.{}'.format(words[1], text))
+                            for name in startswith_filter('.'.join([words[1], text]),
+                                                          get_pkg_matches(pkg))
                         ]
-                        if not completer.matches:
-                            mod = importlib.import_module(words[1])
-                            completer.matches = [
-                                name for name in startswith_filter(
-                                    text, getattr(mod, '__all__', dir(mod))
-                                ) if not name.startswith('_')
-                            ]
+                    if not completer.matches:
+                        mod = importlib.import_module(words[1])
+                        completer.matches = [
+                            name for name in startswith_filter(
+                                text, getattr(mod, '__all__', dir(mod))
+                            ) if not name.startswith('_')
+                        ]
             else:
                 match = completer.complete(text, state)
                 if match is None and '/' in text:
