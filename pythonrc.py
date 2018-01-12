@@ -430,7 +430,7 @@ class ImprovedConsole(InteractiveConsole, object):
             tempbuf.write('\n'.join(lines))
         return tempbuf.name
 
-    def _exec_from_file(self, filename, quiet=False):
+    def _exec_from_file(self, filename, quiet=False, skip_history=False):
         previous = ''
         for stmt in open(filename):
             # - skip over multiple empty lines
@@ -442,7 +442,8 @@ class ImprovedConsole(InteractiveConsole, object):
             if not stripped.startswith('#'):
                 line = stmt.strip('\n')
                 self.push(line)
-                readline.add_history(line)
+                if not skip_history:
+                    readline.add_history(line)
             previous = stripped
 
     def lookup(self, name, namespace=None):
@@ -575,7 +576,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         venv_rc_done = '(no venv rc found)'
         try:
-            self._exec_from_file(config['VENV_RC'], quiet=True)
+            self._exec_from_file(config['VENV_RC'], quiet=True, skip_history=True)
             venv_rc_done = green('Successfully executed venv rc !')
         except IOError:
             pass
