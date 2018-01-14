@@ -114,13 +114,36 @@ class TestImprovedConsole(TestCase):
             self.assertEqual(completer('\t', 0), '    ')
 
         # - keyword completion
-        with patch.object(rl, 'get_line_buffer', return_value='imp\t'):
-            self.assertEqual(completer('imp', 0), 'import ')
+        with patch.object(rl, 'get_line_buffer', return_value='cla\t'):
+            self.assertEqual(completer('cla', 0), 'class ')
 
-        # - module name completion
-        with patch.object(rl, 'get_line_buffer', return_value='from '):
+        # - import statement completion
+        with patch.object(rl, 'get_line_buffer', return_value='import th'):
             self.assertIn(completer('th', 0), ('this', 'threading'))
             self.assertIn(completer('th', 1), ('this', 'threading'))
+
+        # - from ... completion (module name)
+        with patch.object(rl, 'get_line_buffer', return_value='from th'):
+            self.assertIn(completer('th', 0), ('this', 'threading'))
+            self.assertIn(completer('th', 1), ('this', 'threading'))
+
+        # - from ... import completion (import keyword)
+        with patch.object(rl, 'get_line_buffer', return_value='from os '):
+            self.assertEqual(completer('', 0), 'import ')
+
+        # - from ... import completion (submodule name)
+        with patch.object(rl, 'get_line_buffer', return_value='from xlm.'):
+            self.assertEqual(completer('xml.', 0), 'xml.dom')
+            self.assertTrue(completer('xml.', 1).startswith('xml.dom.'))
+
+        # - from ... import completion (submodule import)
+        with patch.object(rl, 'get_line_buffer', return_value='from xml import '):
+            self.assertEqual(completer('', 0), 'dom')
+            self.assertTrue(completer('', 1).startswith('dom.'))
+
+        # - from ... import completion (module content)
+        with patch.object(rl, 'get_line_buffer', return_value='from tempfile import '):
+            self.assertEqual(completer('', 0), 'NamedTemporaryFile')
 
         # - pathname completion
         with patch.object(rl, 'get_line_buffer', return_value='./p'):

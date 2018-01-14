@@ -287,33 +287,41 @@ class ImprovedConsole(InteractiveConsole, object):
 
         startswith_filter = lambda text, names: [name for name in names if name.startswith(text)]
 
+        def get_pkg_matches(pkg):
+            _, pkg_path, _ = imp.find_module(pkg)
+            return (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
+
         def complete_wrapper(text, state):
             line = readline.get_line_buffer()
             if line == '' or line.isspace():
                 return self.tab
             if state == 0 and line.startswith(('from ', 'import ')):
                 words = line.split()
-                if words[0] == 'from' and len(words) >= 2 and 'import'.startswith(text):
-                    completer.matches = ['import']
-                else:
-                    completer.matches = startswith_filter(text, modlist)
-
-                if len(words) == 2 and '.' in text:
+                if len(words) <= 2:
                     pkg = text.split('.', 1)[0]
-                    _, pkg_path, _ = imp.find_module(pkg)
-                    names = (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
-                    completer.matches = startswith_filter(text, names)
-                elif len(words) >= 3 and words[2] == 'import':
+                    completer.matches = startswith_filter(
+                        text, (get_pkg_matches(pkg) if pkg in pkglist else modlist)
+                    )
+
+                if len(words) >= 2 and words[0] == 'from' and 'import'.startswith(text):
+                    completer.matches = ['import']
+
+                if len(words) >= 3 and words[2] == 'import':
+                    completer.matches = []
                     pkg = words[1].split('.', 1)[0]
-                    mod = pkg.split('.', 1)[0]
-                    if mod in pkglist:
-                        _, mod_path, _ = imp.find_module(mod)
+                    if pkg in pkglist:
                         completer.matches = [
-                            name[len(pkg)+1:] for _, name, _ in pkgutil.walk_packages([mod_path], '{}.'.format(mod))
-                            if name.startswith('{}.{}'.format(pkg, text))
+                            name[len(words[1])+1:]
+                            for name in startswith_filter('.'.join([words[1], text]),
+                                                          get_pkg_matches(pkg))
                         ]
-                    else:
-                        completer.matches = startswith_filter(text, dir(importlib.import_module(pkg)))
+                    if not completer.matches:
+                        mod = importlib.import_module(words[1])
+                        completer.matches = [
+                            name for name in startswith_filter(
+                                text, getattr(mod, '__all__', dir(mod))
+                            ) if not name.startswith('_')
+                        ]
             else:
                 match = completer.complete(text, state)
                 if match is None and '/' in text:
@@ -422,7 +430,7 @@ class ImprovedConsole(InteractiveConsole, object):
             tempbuf.write('\n'.join(lines))
         return tempbuf.name
 
-    def _exec_from_file(self, filename, quiet=False):
+    def _exec_from_file(self, filename, quiet=False, skip_history=False):
         previous = ''
         for stmt in open(filename):
             # - skip over multiple empty lines
@@ -434,7 +442,8 @@ class ImprovedConsole(InteractiveConsole, object):
             if not stripped.startswith('#'):
                 line = stmt.strip('\n')
                 self.push(line)
-                readline.add_history(line)
+                if not skip_history:
+                    readline.add_history(line)
             previous = stripped
 
     def lookup(self, name, namespace=None):
@@ -567,7 +576,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         venv_rc_done = '(no venv rc found)'
         try:
-            self._exec_from_file(config['VENV_RC'], quiet=True)
+            self._exec_from_file(config['VENV_RC'], quiet=True, skip_history=True)
             venv_rc_done = green('Successfully executed venv rc !')
         except IOError:
             pass
