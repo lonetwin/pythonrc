@@ -294,7 +294,7 @@ class ImprovedConsole(InteractiveConsole, object):
         def complete_wrapper(text, state):
             line = readline.get_line_buffer()
             if line == '' or line.isspace():
-                return self.tab
+                return None if state > 0 else self.tab
             if state == 0 and line.startswith(('from ', 'import ')):
                 words = line.split()
                 if len(words) <= 2:

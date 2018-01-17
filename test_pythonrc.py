@@ -112,6 +112,7 @@ class TestImprovedConsole(TestCase):
         # - no leading characters
         with patch.object(rl, 'get_line_buffer', return_value='\t'):
             self.assertEqual(completer('\t', 0), '    ')
+            self.assertEqual(completer('', 1), None)
 
         # - keyword completion
         with patch.object(rl, 'get_line_buffer', return_value='cla\t'):
