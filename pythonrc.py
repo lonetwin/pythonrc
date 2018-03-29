@@ -388,7 +388,7 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         more = super(ImprovedConsole, self).push(line)
         if more:
-            if line.endswith((":", '[', '{', '(')):
+            if line.endswith((':', '[', '{', '(')):
                 self._indent += self.tab
         else:
             self._indent = ''
@@ -574,9 +574,11 @@ class ImprovedConsole(InteractiveConsole, object):
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
         """
-        venv_rc_done = '(no venv rc found)'
+        venv_rc_done = cyan('(no venv rc found)')
         try:
             self._exec_from_file(config['VENV_RC'], quiet=True, skip_history=True)
+            # - clear out session_history for venv_rc commands
+            self.session_history = []
             venv_rc_done = green('Successfully executed venv rc !')
         except IOError:
             pass

@@ -68,12 +68,11 @@ There's an section below which shows you how to add new commands.
 Configuration
 =============
 
-The code attempts to be easy to read and modify to suit personal preferences as
-easily as possible. You can change any of the `commands` or the options like the
-path to the history file, its size etc in the config dict at the top of the rc
-file. For instance, if you prefer to set the default edit command to `%edit`
-instead of the default ``\e``, you just have to change the entry in the config
-dict.
+The code attempts to be easy to read and modify to suit personal preferences.
+You can change any of the `commands` or the options like the path to the history
+file, its size etc in the config dict at the top of the rc file. For instance,
+if you prefer to set the default edit command to `%edit` instead of the default
+``\e``, you just have to change the entry in the config dict.
 
 Note that, the `init_readline()` method also reads your `.inputrc` file if it
 exists. This allows you to share the same `readline` behavior as all other tools
