@@ -291,6 +291,9 @@ class ImprovedConsole(InteractiveConsole, object):
             _, pkg_path, _ = imp.find_module(pkg)
             return (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
 
+        def get_path_matches(text):
+            return [x+os.path.sep if os.path.isdir(x) else x for x in glob.glob('{}*'.format(text))]
+
         def complete_wrapper(text, state):
             line = readline.get_line_buffer()
             if line == '' or line.isspace():
@@ -324,12 +327,17 @@ class ImprovedConsole(InteractiveConsole, object):
                         ]
             else:
                 match = completer.complete(text, state)
-                if match is None and '/' in text:
-                    completer.matches = glob.glob(text+'*')
+                if match is None and os.path.sep in text:
+                    completer.matches = get_path_matches(text)
             try:
                 match = completer.matches[state]
                 return '{}{}'.format(match, ' ' if keyword.iskeyword(match) else '')
             except IndexError:
+                # - if we just completed a directory, switch to matching its contents
+                matched = completer.matches[0]
+                if matched.endswith(os.path.sep):
+                    completer.matches = get_path_matches(matched)
+                    return completer.matches[state] if completer.matches else None
                 return None
         return complete_wrapper
 
