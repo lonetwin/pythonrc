@@ -502,8 +502,10 @@ class ImprovedConsole(InteractiveConsole, object):
         else:
             # - make a list of all lines in session history, commenting
             # any non-blank lines.
-            filename = self._mktemp_buffer("# {}".format(line) if line else ''
-                                           for line in (line.strip('\n') for line in self.session_history))
+            filename = self._mktemp_buffer(
+                '# {}'.format(line) if line.strip() else ''
+                for line in (line.strip('\n') for line in self.session_history)
+            )
 
         # - shell out to the editor
         os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
