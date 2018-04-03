@@ -150,6 +150,25 @@ class TestImprovedConsole(TestCase):
         with patch.object(rl, 'get_line_buffer', return_value='./p'):
             self.assertEqual(completer('./py', 0), './pythonrc.py')
 
+        mock_input_line = ['/', '/', '/', '/h', '/home/t', '/home/t', '/home/test/f']
+        mock_globs = [['/bin', '/home', '/sbin'],
+                      ['/home'],
+                      ['/home/test', '/home/steve'],
+                      ['/home/test'],
+                      ['/home/test/foo', '/home/test/bar/', '/home/test/baz']]
+        mock_isdir = lambda path: not (path == '/home/test/foo')
+
+        with patch.object(rl, 'get_line_buffer', side_effect=mock_input_line), \
+             patch.object(pythonrc.glob, 'glob', side_effect=mock_globs), \
+             patch.object(pythonrc.os.path, 'isdir', side_effect=mock_isdir):
+            self.assertEqual(completer('/', 0), '/bin/')
+            self.assertEqual(completer('/', 1), '/home/')
+            self.assertEqual(completer('/', 2), '/sbin/')
+            self.assertEqual(completer('/h', 0), '/home/')
+            self.assertEqual(completer('/home/', 0), '/home/test/')
+            self.assertEqual(completer('/home/t', 0), '/home/test/')
+            self.assertEqual(completer('/home/test/f', 0), '/home/test/foo')
+
     def test_push(self):
         self.assertEqual(self.pymp._indent, '')
         self.pymp.push('class Foo:')
