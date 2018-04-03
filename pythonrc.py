@@ -331,7 +331,11 @@ class ImprovedConsole(InteractiveConsole, object):
                     completer.matches = get_path_matches(text)
             try:
                 match = completer.matches[state]
-                return '{}{}'.format(match, ' ' if keyword.iskeyword(match) else '')
+                if keyword.iskeyword(match):
+                    if match in ('else', 'finally', 'try'):
+                        return '{}:'.format(match)
+                    return '{} '.format(match)
+                return match
             except IndexError:
                 # - if we just completed a directory, switch to matching its contents
                 matched = completer.matches[0]
