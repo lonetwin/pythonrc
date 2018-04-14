@@ -22,6 +22,23 @@ os.environ['SKIP_PYMP'] = "1"
 
 import pythonrc
 
+EDIT_CMD_TEST_LINES="""
+
+x = 42
+class Foo(object):
+
+
+    def first(self):
+        pass
+
+
+    def second(self):
+
+        pass
+
+x += 1
+"""
+
 
 class TestImprovedConsole(TestCase):
 
@@ -266,3 +283,18 @@ class TestImprovedConsole(TestCase):
                                               'HOME': '/home/me/'}):
             self.pymp.process_sh_cmd('cd {path}')
             mocked_chdir.assert_called_once_with('/home/me/dummy/location')
+
+    def test_exec_from_file(self):
+        """Test exec from file with multiple newlines in code blocks"""
+        pymp = pythonrc.ImprovedConsole()
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tempfl:
+            tempfl.write(EDIT_CMD_TEST_LINES)
+            tempfl.close()
+            pymp._exec_from_file(tempfl.name)
+            os.unlink(tempfl.name)
+
+            self.assertIn('Foo', pymp.locals)
+            self.assertIn('first', pymp.locals['Foo'].__dict__)
+            self.assertIn('second', pymp.locals['Foo'].__dict__)
+            self.assertIn('x', pymp.locals)
+            self.assertEqual(pymp.locals['x'], 43)
