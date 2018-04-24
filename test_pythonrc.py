@@ -36,7 +36,16 @@ class Foo(object):
 
         pass
 
-x += 1
+
+if x == 43:
+    raise Exception()
+elif x == 42:
+    x += 1
+else:
+    raise Exception()
+
+f = Foo()
+
 """
 
 
@@ -297,4 +306,5 @@ class TestImprovedConsole(TestCase):
             self.assertIn('first', pymp.locals['Foo'].__dict__)
             self.assertIn('second', pymp.locals['Foo'].__dict__)
             self.assertIn('x', pymp.locals)
+            self.assertIn('f', pymp.locals)
             self.assertEqual(pymp.locals['x'], 43)
