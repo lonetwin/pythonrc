@@ -453,10 +453,16 @@ class ImprovedConsole(InteractiveConsole, object):
                 self.write(cyan("... {}".format(stmt)))
             if not stripped.startswith('#'):
                 line = stmt.strip('\n')
-                self.push(line)
+                if line and not line[0].isspace():
+                    source = "\n".join(self.buffer)
+                    more = self.runsource(source, self.filename)
+                    if not more:
+                        self.resetbuffer()
+                self.buffer.append(line)
                 if not skip_history:
                     readline.add_history(line)
             previous = stripped
+        self.push('')
 
     def lookup(self, name, namespace=None):
         """Lookup the (dotted) object specified with the string `name`
