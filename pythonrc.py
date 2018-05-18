@@ -87,7 +87,7 @@ from functools import partial
 from tempfile import NamedTemporaryFile
 
 
-__version__ = "0.7.3"
+__version__ = "0.8.0"
 
 
 config = dict(
