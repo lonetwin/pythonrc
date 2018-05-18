@@ -168,8 +168,9 @@ class ImprovedConsole(InteractiveConsole, object):
         # - regex to identify and extract commands and their arguments
         self.commands_re = re.compile(
             r'({})\s*([^(]*)'.format(
-                '|'.join(re.escape(cmd) for cmd in self.commands.keys())
-            ))
+                '|'.join(re.escape(cmd) for cmd in self.commands)
+            )
+        )
 
     def init_color_functions(self):
         """Populates globals dict with some helper functions for colorizing text
@@ -458,9 +459,9 @@ class ImprovedConsole(InteractiveConsole, object):
                     more = self.runsource(source, self.filename)
                     if not more:
                         self.resetbuffer()
+                    if not skip_history:
+                        readline.add_history(line)
                 self.buffer.append(line)
-                if not skip_history:
-                    readline.add_history(line)
             previous = stripped
         self.push('')
 
@@ -506,11 +507,11 @@ class ImprovedConsole(InteractiveConsole, object):
             except (IOError, TypeError, NameError) as e:
                 return self.writeline(e)
         else:
-            # - make a list of all lines in session history, commenting
-            # any non-blank lines.
+            # - make a list of all lines in history, commenting any non-blank lines.
+            history = self.session_history or open(config['HISTFILE'])
             filename = self._mktemp_buffer(
                 '# {}'.format(line) if line.strip() else ''
-                for line in (line.strip('\n') for line in self.session_history)
+                for line in (line.strip('\n') for line in history)
             )
 
         # - shell out to the editor
