@@ -460,7 +460,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     if not more:
                         self.resetbuffer()
                 self.buffer.append(line)
-                if not skip_history:
+                if line.strip() and not skip_history:
                     readline.add_history(line)
             previous = stripped
         self.push('')
