@@ -459,9 +459,9 @@ class ImprovedConsole(InteractiveConsole, object):
                     more = self.runsource(source, self.filename)
                     if not more:
                         self.resetbuffer()
-                    if not skip_history:
-                        readline.add_history(line)
                 self.buffer.append(line)
+                if not skip_history:
+                    readline.add_history(line)
             previous = stripped
         self.push('')
 

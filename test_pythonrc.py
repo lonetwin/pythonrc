@@ -7,6 +7,11 @@ import tempfile
 from unittest import TestCase, skipIf, skipUnless
 
 try:
+    from itertools import zip_longest
+except ImportError:
+    from itertools import izip_longest as zip_longest
+
+try:
     from unittest.mock import patch, Mock
 except ImportError:
     from mock import patch, Mock
@@ -308,3 +313,9 @@ class TestImprovedConsole(TestCase):
             self.assertIn('x', pymp.locals)
             self.assertIn('f', pymp.locals)
             self.assertEqual(pymp.locals['x'], 43)
+
+        with tempfile.NamedTemporaryFile(mode='w') as tempfl:
+            pythonrc.readline.write_history_file(tempfl.name)
+            expected = filter(None, EDIT_CMD_TEST_LINES.splitlines())
+            recieved = filter(None, map(str.rstrip, open(tempfl.name)))
+            self.assertEqual(list(expected), list(recieved))
