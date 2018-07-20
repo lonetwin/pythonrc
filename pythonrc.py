@@ -459,9 +459,9 @@ class ImprovedConsole(InteractiveConsole, object):
                     more = self.runsource(source, self.filename)
                     if not more:
                         self.resetbuffer()
-                    if not skip_history:
-                        readline.add_history(line)
                 self.buffer.append(line)
+                if line.strip() and not skip_history:
+                    readline.add_history(line)
             previous = stripped
         self.push('')
 
@@ -572,7 +572,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 # in a shell, so I need to create one:
                 os.system(config['SHELL'])
             else:
-                os.kill(os.getpid(), signal.SIGSTOP)
+                os.kill(os.getpgrp(), signal.SIGSTOP)
 
     @_doc_to_usage
     def process_list_cmd(self, arg):
