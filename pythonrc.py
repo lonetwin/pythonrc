@@ -66,7 +66,6 @@ except ImportError:
 
 import atexit
 import glob
-import imp
 import importlib
 import inspect
 import keyword
@@ -107,6 +106,25 @@ config = dict(
     # object to open the source file for the object.
     LINE_NUM_OPT = "+{line_no}",
 )
+
+
+if sys.version_info < (3, 7):
+    import imp
+    def find_module(name):
+        """Search for a module"""
+        (_, pkg_path, _) = imp.find_module(name)
+        return pkg_path
+else:
+    def find_module(name):
+        """Search for a module"""
+        spec = importlib.util.find_spec('name')
+        orig = spec.origin
+        sloc = spec.submodule_search_locations
+        if orig and not orig.endswith('/__init__.py'):
+            return orig
+        if sloc.submodule_search_locations:
+            return sloc.submodule_search_locations[0]
+        return orig
 
 
 class ImprovedConsole(InteractiveConsole, object):
@@ -289,7 +307,7 @@ class ImprovedConsole(InteractiveConsole, object):
         startswith_filter = lambda text, names: [name for name in names if name.startswith(text)]
 
         def get_pkg_matches(pkg):
-            _, pkg_path, _ = imp.find_module(pkg)
+            pkg_path = find_module(pkg)
             return (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
 
         def get_path_matches(text):
