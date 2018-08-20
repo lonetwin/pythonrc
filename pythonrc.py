@@ -117,7 +117,7 @@ if sys.version_info < (3, 7):
 else:
     def find_module(name):
         """Search for a module"""
-        spec = importlib.util.find_spec('name')
+        spec = importlib.util.find_spec(name)
         orig = spec.origin
         sloc = spec.submodule_search_locations
         if orig and not orig.endswith('/__init__.py'):
