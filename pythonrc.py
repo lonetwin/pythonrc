@@ -100,7 +100,7 @@ config = dict(
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
     HELP_CMD = '\h',
     LIST_CMD = '\l',
-    VENV_RC  = ".venv_rc.py",
+    VENV_RC  = os.getenv("VENV_RC", ".venv_rc.py"),
     # - option to pass to the editor to open a file at a specific
     # `line_no`. This is used when the EDIT_CMD is invoked with a python
     # object to open the source file for the object.
