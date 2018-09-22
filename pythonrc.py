@@ -311,11 +311,16 @@ class ImprovedConsole(InteractiveConsole, object):
                 pkglist.append(name)
         pkglist, modlist = frozenset(pkglist), frozenset(modlist)
 
-        startswith_filter = lambda text, names: [name for name in names if name.startswith(text)]
+        def startswith_filter(text, names, striptext=None):
+            if striptext:
+                return [name.lstrip(striptext) for name in names if name.startswith(text)]
+            return [name for name in names if name.startswith(text)]
 
         def get_pkg_matches(pkg):
             pkg_path = find_module(pkg)
-            return (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
+            return (name for _, name, _ in pkgutil.walk_packages(
+                [pkg_path], '{}.'.format(pkg), onerror=lambda _: None
+            ))
 
         def get_path_matches(text):
             return [
@@ -330,25 +335,30 @@ class ImprovedConsole(InteractiveConsole, object):
             if state == 0 and line.startswith(('from ', 'import ')):
                 words = line.split()
                 if len(words) <= 2:
-                    pkg = text.split('.', 1)[0]
+                    # import p<tab> / from p<tab>
+                    modname = text.split('.', 1)[0]
                     completer.matches = startswith_filter(
-                        text, (get_pkg_matches(pkg) if pkg in pkglist else modlist)
+                        text, (get_pkg_matches(modname) if modname in pkglist else modlist)
                     )
 
                 if len(words) >= 2 and words[0] == 'from' and 'import'.startswith(text):
+                    # from pkg.sub im<tab>
                     completer.matches = ['import']
 
                 if len(words) >= 3 and words[2] == 'import':
+                    # from pkg.sub import na<tab>
                     completer.matches = []
-                    pkg = words[1].split('.', 1)[0]
+                    namespace = words[1]
+                    pkg = namespace.split('.', 1)[0]
                     if pkg in pkglist:
-                        completer.matches = [
-                            name[len(words[1])+1:]
-                            for name in startswith_filter('.'.join([words[1], text]),
-                                                          get_pkg_matches(pkg))
-                        ]
+                        # from pkg.sub import na<tab>
+                        match_text = '.'.join((namespace, text))
+                        completer.matches = startswith_filter(
+                            match_text, get_pkg_matches(pkg), '{}.'.format(namespace)
+                        )
                     if not completer.matches:
-                        mod = importlib.import_module(words[1])
+                        # from module import na<ta>
+                        mod = importlib.import_module(namespace)
                         completer.matches = [
                             name for name in startswith_filter(
                                 text, getattr(mod, '__all__', dir(mod))
