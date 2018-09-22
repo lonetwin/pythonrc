@@ -105,6 +105,8 @@ config = dict(
     # `line_no`. This is used when the EDIT_CMD is invoked with a python
     # object to open the source file for the object.
     LINE_NUM_OPT = "+{line_no}",
+    # - should path completion expand ~ using os.path.expanduser()
+    COMPLETION_EXPANDS_TILDE = True,
 )
 
 
@@ -247,6 +249,13 @@ class ImprovedConsole(InteractiveConsole, object):
         # - enable auto-indenting
         readline.set_pre_input_hook(self.auto_indent_hook)
 
+        # - remove '/' and '~' from delimiters to help with path completion
+        completer_delims = readline.get_completer_delims()
+        completer_delims = completer_delims.replace('/', '')
+        if config.get('COMPLETION_EXPANDS_TILDE'):
+            completer_delims = completer_delims.replace('~', '')
+        readline.set_completer_delims(completer_delims)
+
     def init_prompt(self):
         """Activates color on the prompt based on python version.
 
@@ -295,8 +304,6 @@ class ImprovedConsole(InteractiveConsole, object):
         completion if there is no preceding text.
         """
         completer = rlcompleter.Completer(namespace=self.locals)
-        # - remove / from the delimiters to help identify possibility for path completion
-        readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
         pkglist, modlist = [], []
         for _, name, ispkg in pkgutil.iter_modules():
             modlist.append(name)
@@ -311,7 +318,10 @@ class ImprovedConsole(InteractiveConsole, object):
             return (name for _, name, _ in pkgutil.walk_packages([pkg_path], '{}.'.format(pkg)))
 
         def get_path_matches(text):
-            return [x+os.path.sep if os.path.isdir(x) else x for x in glob.glob('{}*'.format(text))]
+            return [
+                item+os.path.sep if os.path.isdir(item) else item
+                for item in glob.glob('{}*'.format(text))
+            ]
 
         def complete_wrapper(text, state):
             line = readline.get_line_buffer()
@@ -347,7 +357,10 @@ class ImprovedConsole(InteractiveConsole, object):
             else:
                 match = completer.complete(text, state)
                 if match is None and os.path.sep in text:
-                    completer.matches = get_path_matches(text)
+                    completer.matches = get_path_matches(
+                        os.path.expanduser(text)
+                        if config.get('COMPLETION_EXPANDS_TILDE') else text
+                    )
             try:
                 match = completer.matches[state]
                 if keyword.iskeyword(match):
