@@ -200,6 +200,11 @@ class TestImprovedConsole(TestCase):
             self.assertEqual(completer('/home/t', 0), '/home/test/')
             self.assertEqual(completer('/home/test/f', 0), '/home/test/foo')
 
+        # - pathname completion, with expand user
+        with patch.object(rl, 'get_line_buffer', return_value='~/'):
+            completion = completer('~/', 0)
+            self.assertTrue(completion.startswith(os.path.expanduser('~')))
+
     def test_push(self):
         self.assertEqual(self.pymp._indent, '')
         self.pymp.push('class Foo:')
