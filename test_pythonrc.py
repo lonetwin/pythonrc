@@ -275,10 +275,27 @@ class TestImprovedConsole(TestCase):
         with patch.object(pythonrc.os, 'system') as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
              patch.object(self.pymp, '_exec_from_file') as mocked_exec:
+            self.pymp.session_history = 'x = 42'
             self.pymp.process_edit_cmd('')
             mocked_system.assert_called_once_with('vi  /tmp/dummy')
-            mocked_exec.assert_called_once_with('/tmp/dummy')
             mocked_unlink.assert_called_once_with('/tmp/dummy')
+            mocked_exec.assert_called_once_with(
+                '/tmp/dummy',
+                print_comments=pythonrc.config['POST_EDIT_PRINT_COMMENTS']
+            )
+
+    @patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
+                  return_value='/tmp/dummy')
+    def test_edit_cmd3(self, *ignored):
+        """Test edit previous session"""
+        with patch.object(pythonrc.os, 'system') as mocked_system, \
+             patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
+             patch.object(self.pymp, '_exec_from_file') as mocked_exec:
+            self.pymp.session_history = []
+            self.pymp.process_edit_cmd('')
+            mocked_system.assert_called_once_with('vi  /tmp/dummy')
+            mocked_unlink.assert_called_once_with('/tmp/dummy')
+            mocked_exec.assert_called_once_with('/tmp/dummy', print_comments=False)
 
     def test_sh_exec0(self):
         """Test sh exec with command and argument"""
@@ -324,3 +341,25 @@ class TestImprovedConsole(TestCase):
             expected = filter(None, EDIT_CMD_TEST_LINES.splitlines())
             recieved = filter(None, map(str.rstrip, open(tempfl.name)))
             self.assertEqual(list(expected), list(recieved))
+
+    def test_post_edit_print_comments0(self):
+        """Test post edit print comments"""
+        with patch('sys.stderr', new_callable=StringIO) as mock_stderr, \
+                patch.object(pythonrc.os, 'system') as mocked_system:
+            self.pymp.session_history = ['x = 42']
+            self.pymp.process_edit_cmd('')
+            self.assertEquals(
+                sys.stderr.getvalue(),
+                pythonrc.grey('... # x = 42', bold=False)
+            )
+
+    def test_post_edit_print_comments1(self):
+        """Test post edit do not print comments"""
+        with patch('sys.stderr', new_callable=StringIO) as mock_stderr, \
+                patch.object(pythonrc.os, 'system') as mocked_system, \
+                tempfile.NamedTemporaryFile(mode='w', delete=False) as tempfl:
+            tempfl.write('# x = 42\ny = "foo"')
+            tempfl.close()
+            self.pymp._exec_from_file(tempfl.name, print_comments=False)
+            os.unlink(tempfl.name)
+            self.assertEquals(sys.stderr.getvalue(), pythonrc.cyan('... y = "foo"'))
