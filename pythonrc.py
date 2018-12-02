@@ -107,6 +107,8 @@ config = dict(
     LINE_NUM_OPT = "+{line_no}",
     # - should path completion expand ~ using os.path.expanduser()
     COMPLETION_EXPANDS_TILDE = True,
+    # - when executing edited history, should we also print comments
+    POST_EDIT_PRINT_COMMENTS = True,
 )
 
 
@@ -205,7 +207,7 @@ class ImprovedConsole(InteractiveConsole, object):
             return "{color}{text}{reset}".format(**vars())
 
         g = globals()
-        for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan'], 31):
+        for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'grey'], 31):
             g[color] = partial(colorize, code)
 
     def init_readline(self):
@@ -451,7 +453,7 @@ class ImprovedConsole(InteractiveConsole, object):
     def write(self, data):
         """Write out data to stderr
         """
-        sys.stderr.write(red(data))
+        sys.stderr.write(data if data.startswith('\033[') else red(data))
 
     def writeline(self, data):
         """Same as write but adds a newline to the end
@@ -484,7 +486,8 @@ class ImprovedConsole(InteractiveConsole, object):
             tempbuf.write('\n'.join(lines))
         return tempbuf.name
 
-    def _exec_from_file(self, filename, quiet=False, skip_history=False):
+    def _exec_from_file(self, filename, quiet=False, skip_history=False,
+                        print_comments=config['POST_EDIT_PRINT_COMMENTS']):
         previous = ''
         for stmt in open(filename):
             # - skip over multiple empty lines
@@ -492,7 +495,11 @@ class ImprovedConsole(InteractiveConsole, object):
             if stripped == '' and stripped == previous:
                 continue
             if not quiet:
-                self.write(cyan("... {}".format(stmt)))
+                if stripped.startswith('#'):
+                    if print_comments:
+                        self.write(grey("... {}".format(stmt), bold=False))
+                else:
+                    self.write(cyan("... {}".format(stmt)))
             if not stripped.startswith('#'):
                 line = stmt.strip('\n')
                 if line and not line[0].isspace():
@@ -558,10 +565,14 @@ class ImprovedConsole(InteractiveConsole, object):
         # - shell out to the editor
         os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
 
-        # - if arg was not provided (we edited session history), execute
-        # it in the current namespace
+        # - if arg was not provided (ie: we edited history), execute
+        # un-commented lines in the current namespace
         if not arg:
-            self._exec_from_file(filename)
+            # - if HISTFILE contents were edited (ie: EDIT_CMD in a
+            # brand new session), don't print commented out lines
+            print_comments = (False if history != self.session_history
+                              else config['POST_EDIT_PRINT_COMMENTS'])
+            self._exec_from_file(filename, print_comments=print_comments)
             os.unlink(filename)
 
     @_doc_to_usage
@@ -596,8 +607,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 else:
                     cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    out, err = process.communicate()
-                    rc = process.returncode
+                    (out, err), rc = (process.communicate(), process.returncode)
                     print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
                     builtins._ = cmd_exec(out, err, rc)
                     del cmd_exec
