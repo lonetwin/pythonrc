@@ -168,10 +168,14 @@ class TestImprovedConsole(TestCase):
             self.assertEqual(completer('xml.', 0), 'xml.dom')
             self.assertTrue(completer('xml.', 1).startswith('xml.dom.'))
 
-        # - from ... import completion (submodule import)
+        # - from ... import completion (submodule import - 0)
         with patch.object(rl, 'get_line_buffer', return_value='from xml import '):
             self.assertEqual(completer('', 0), 'dom')
             self.assertTrue(completer('', 1).startswith('dom.'))
+
+        # - from ... import completion (submodule import - 1)
+        with patch.object(rl, 'get_line_buffer', return_value='from xml.dom import x'):
+            self.assertEqual(completer('x', 0), 'xmlbuilder')
 
         # - from ... import completion (module content)
         with patch.object(rl, 'get_line_buffer', return_value='from tempfile import '):
