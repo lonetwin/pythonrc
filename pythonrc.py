@@ -315,7 +315,7 @@ class ImprovedConsole(InteractiveConsole, object):
 
         def startswith_filter(text, names, striptext=None):
             if striptext:
-                return [name.lstrip(striptext) for name in names if name.startswith(text)]
+                return [name.replace(striptext, '') for name in names if name.startswith(text)]
             return [name for name in names if name.startswith(text)]
 
         def get_pkg_matches(pkg):
