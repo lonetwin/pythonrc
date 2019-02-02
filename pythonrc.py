@@ -338,7 +338,7 @@ class ImprovedConsole(InteractiveConsole, object):
                 words = line.split()
                 if len(words) <= 2:
                     # import p<tab> / from p<tab>
-                    modname = text.split('.', 1)[0]
+                    modname, _, _ = text.partition('.')
                     completer.matches = startswith_filter(
                         text, (get_pkg_matches(modname) if modname in pkglist else modlist)
                     )
@@ -351,7 +351,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     # from pkg.sub import na<tab>
                     completer.matches = []
                     namespace = words[1]
-                    pkg = namespace.split('.', 1)[0]
+                    pkg, _, _ = namespace.partition('.')
                     if pkg in pkglist:
                         # from pkg.sub import na<tab>
                         match_text = '.'.join((namespace, text))
@@ -518,10 +518,9 @@ class ImprovedConsole(InteractiveConsole, object):
         in the specified namespace or in the current namespace if
         unspecified.
         """
-        components = name.split('.', 1)
-        name = components.pop(0)
+        name, _, components = name.partition('.')
         obj = getattr(namespace, name, namespace) if namespace else self.locals.get(name)
-        return self.lookup(components[0], obj) if components else obj
+        return self.lookup(components, obj) if components else obj
 
     @_doc_to_usage
     def process_edit_cmd(self, arg=''):
@@ -629,10 +628,10 @@ class ImprovedConsole(InteractiveConsole, object):
     def process_list_cmd(self, arg):
         """{LIST_CMD} <object> - List source code for object, if possible.
         """
+        if not arg:
+            return self.writeline('source list command requires an argument '
+                                  '(eg: {} foo)'.format(config['LIST_CMD']))
         try:
-            if not arg:
-                self.writeline('source list command requires an argument '
-                               '(eg: {} foo)\n'.format(config['LIST_CMD']))
             src_lines, offset = inspect.getsourcelines(self.lookup(arg))
         except (IOError, TypeError, NameError) as e:
             self.writeline(e)

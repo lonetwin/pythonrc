@@ -367,3 +367,12 @@ class TestImprovedConsole(TestCase):
             self.pymp._exec_from_file(tempfl.name, print_comments=False)
             os.unlink(tempfl.name)
             self.assertEquals(sys.stderr.getvalue(), pythonrc.cyan('... y = "foo"'))
+
+    def test_lookup(self):
+        self.pymp.locals['os'] = os
+        self.assertIs(self.pymp.lookup('os'), os)
+        self.assertIs(self.pymp.lookup('os.path'), os.path)
+        self.assertIs(self.pymp.lookup('os.path.basename'), os.path.basename)
+
+        self.assertIs(self.pymp.lookup('subprocess'), None)
+        self.assertIs(self.pymp.lookup('subprocess.Popen'), None)
