@@ -486,29 +486,52 @@ class ImprovedConsole(InteractiveConsole, object):
             tempbuf.write('\n'.join(lines))
         return tempbuf.name
 
+    def showtraceback(self, *args):
+        """Wrapper around super(..).showtraceback()
+
+        We do this to detect whether any subsequent statements after a
+        traceback occurs should be skipped. This is relevant when
+        executing multiple statements from an edited buffer.
+        """
+        self._skip_subsequent = True
+        return super(ImprovedConsole, self).showtraceback(*args)
+
     def _exec_from_file(self, filename, quiet=False, skip_history=False,
                         print_comments=config['POST_EDIT_PRINT_COMMENTS']):
+        self._skip_subsequent = False
         previous = ''
         for stmt in open(filename):
             # - skip over multiple empty lines
             stripped = stmt.strip()
-            if stripped == '' and stripped == previous:
+            if stripped == previous == '':
                 continue
-            if not quiet:
-                if stripped.startswith('#'):
-                    if print_comments:
-                        self.write(grey("... {}".format(stmt), bold=False))
-                else:
-                    self.write(cyan("... {}".format(stmt)))
-            if not stripped.startswith('#'):
+
+            # - if line is a comment, print (if required) and move to
+            # next line
+            if stripped.startswith('#'):
+                if print_comments and not quiet:
+                    self.write(grey("... {}".format(stmt), bold=False))
+                continue
+
+            # - process line only if we haven't encountered an error yet
+            if not self._skip_subsequent:
                 line = stmt.strip('\n')
                 if line and not line[0].isspace():
+                    # - end of previous statement, submit buffer for
+                    # execution
                     source = "\n".join(self.buffer)
                     more = self.runsource(source, self.filename)
                     if not more:
                         self.resetbuffer()
+
+            if not quiet:
+                self.write(cyan("... {}".format(stmt), bold=(not self._skip_subsequent)))
+
+            if self._skip_subsequent:
+                self.session_history.append(stmt)
+            else:
                 self.buffer.append(line)
-                if line.strip() and not skip_history:
+                if not skip_history:
                     readline.add_history(line)
             previous = stripped
         self.push('')
