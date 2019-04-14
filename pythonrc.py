@@ -94,12 +94,16 @@ config = dict(
     HISTSIZE = -1,
     EDITOR   = os.getenv('EDITOR', 'vi'),
     SHELL    = os.getenv('SHELL', '/bin/bash'),
-    EDIT_CMD = '\e',
+    EDIT_CMD = r'\e',
     SH_EXEC  = '!',
     DOC_CMD  = '?',
     DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
-    HELP_CMD = '\h',
-    LIST_CMD = '\l',
+    HELP_CMD = r'\h',
+    LIST_CMD = r'\l',
+    # - Should we auto-indent by default
+    AUTO_INDENT = True,
+    # Toggle auto_indent command (eg: when pasting code)
+    TOGGLE_AUTO_INDENT_CMD = r'\\',
     VENV_RC  = os.getenv("VENV_RC", ".venv_rc.py"),
     # - option to pass to the editor to open a file at a specific
     # `line_no`. This is used when the EDIT_CMD is invoked with a python
@@ -186,6 +190,7 @@ class ImprovedConsole(InteractiveConsole, object):
             config['LIST_CMD']: self.process_list_cmd,
             config['SH_EXEC']: self.process_sh_cmd,
             config['HELP_CMD']: self.process_help_cmd,
+            config['TOGGLE_AUTO_INDENT_CMD']: self.toggle_auto_indent
         }
         # - regex to identify and extract commands and their arguments
         self.commands_re = re.compile(
@@ -193,6 +198,14 @@ class ImprovedConsole(InteractiveConsole, object):
                 '|'.join(re.escape(cmd) for cmd in self.commands)
             )
         )
+
+    def _doc_to_usage(method):
+        def inner(self, arg):
+            arg = arg.strip()
+            if arg.startswith(('-h', '--help')):
+                return self.writeline(blue(method.__doc__.strip().format(**config)))
+            return method(self, arg)
+        return inner
 
     def init_color_functions(self):
         """Populates globals dict with some helper functions for colorizing text
@@ -249,7 +262,8 @@ class ImprovedConsole(InteractiveConsole, object):
         readline.set_completer(self.improved_rlcompleter())
 
         # - enable auto-indenting
-        readline.set_pre_input_hook(self.auto_indent_hook)
+        if config['AUTO_INDENT']:
+            readline.set_pre_input_hook(self.auto_indent_hook)
 
         # - remove '/' and '~' from delimiters to help with path completion
         completer_delims = readline.get_completer_delims()
@@ -396,6 +410,17 @@ class ImprovedConsole(InteractiveConsole, object):
         readline.insert_text(self._indent)
         readline.redisplay()
 
+    @_doc_to_usage
+    def toggle_auto_indent(self, _):
+        """{TOGGLE_AUTO_INDENT_CMD}
+
+        Toggles the auto-indentation behavior.
+        """
+        hook = None if config['AUTO_INDENT'] else self.auto_indent_hook
+        readline.set_pre_input_hook(hook)
+        config['AUTO_INDENT'] = bool(hook)
+        return ''
+
     def raw_input(self, prompt=''):
         """Read the input and delegate if necessary.
         """
@@ -421,7 +446,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     line = 'help("{}")'.format(line)
                 else:
                     line = 'print({}.__doc__)'.format(line)
-        elif line.startswith(self.tab) or self._indent:
+        elif config['AUTO_INDENT'] and (line.startswith(self.tab) or self._indent):
             if line.strip():
                 # if non empty line with an indent, check if the indent
                 # level has been changed
@@ -471,13 +496,6 @@ class ImprovedConsole(InteractiveConsole, object):
             previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
 
-    def _doc_to_usage(method):
-        def inner(self, arg):
-            arg = arg.strip()
-            if arg.startswith(('-h', '--help')):
-                return self.writeline(blue(method.__doc__.strip().format(**config)))
-            return method(self, arg)
-        return inner
 
     def _mktemp_buffer(self, lines):
         """Writes lines to a temp file and returns the filename.
