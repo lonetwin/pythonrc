@@ -419,6 +419,11 @@ class ImprovedConsole(InteractiveConsole, object):
         hook = None if config['AUTO_INDENT'] else self.auto_indent_hook
         readline.set_pre_input_hook(hook)
         config['AUTO_INDENT'] = bool(hook)
+        print(
+            grey('# Auto-Indent has been {}'.format(
+                'enabled' if config['AUTO_INDENT'] else 'disabled'
+            ), bold=False)
+        )
         return ''
 
     def raw_input(self, prompt=''):
