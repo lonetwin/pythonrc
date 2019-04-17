@@ -102,7 +102,7 @@ config = dict(
     LIST_CMD = r'\l',
     # - Should we auto-indent by default
     AUTO_INDENT = True,
-    # Toggle auto_indent command (eg: when pasting code)
+    # - Run-time toggle for auto-indent (eg: when pasting code)
     TOGGLE_AUTO_INDENT_CMD = r'\\',
     VENV_RC  = os.getenv("VENV_RC", ".venv_rc.py"),
     # - option to pass to the editor to open a file at a specific
@@ -412,24 +412,31 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def toggle_auto_indent(self, _):
-        """{TOGGLE_AUTO_INDENT_CMD}
-
-        Toggles the auto-indentation behavior.
+        """{TOGGLE_AUTO_INDENT_CMD} - Toggles the auto-indentation behavior
         """
         hook = None if config['AUTO_INDENT'] else self.auto_indent_hook
-        readline.set_pre_input_hook(hook)
+        msg = '# Auto-Indent has been {}abled\n'.format('en' if hook else 'dis')
         config['AUTO_INDENT'] = bool(hook)
-        print(
-            grey('# Auto-Indent has been {}'.format(
-                'enabled' if config['AUTO_INDENT'] else 'disabled'
-            ), bold=False)
-        )
+
+        if hook is None:
+            msg += ('# End of blocks will be detected after 3 empty lines\n'
+                    '# Re-type {TOGGLE_AUTO_INDENT_CMD} on a line by itself to enable')
+
+        readline.set_pre_input_hook(hook)
+        print(grey(msg.format(**config), bold=False))
         return ''
 
     def raw_input(self, prompt=''):
         """Read the input and delegate if necessary.
         """
-        line = InteractiveConsole.raw_input(self, prompt)
+        line = super(ImprovedConsole, self).raw_input(prompt)
+        empty_lines = 3 if line else 1
+        while not config['AUTO_INDENT'] and empty_lines < 3:
+            line = super(ImprovedConsole, self).raw_input(prompt)
+            empty_lines += 1 if not line else 3
+        return self._cmd_handler(line)
+
+    def _cmd_handler(self, line):
         matches = self.commands_re.match(line)
         if matches:
             command, args = matches.groups()
