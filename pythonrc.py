@@ -102,7 +102,7 @@ config = dict(
     LIST_CMD = r'\l',
     # - Should we auto-indent by default
     AUTO_INDENT = True,
-    # - Run-time toggle for auto-indent (eg: when pasting code)
+    # - Run-time toggle for auto-indent command (eg: when pasting code)
     TOGGLE_AUTO_INDENT_CMD = r'\\',
     VENV_RC  = os.getenv("VENV_RC", ".venv_rc.py"),
     # - option to pass to the editor to open a file at a specific
@@ -584,7 +584,10 @@ class ImprovedConsole(InteractiveConsole, object):
 
         - without arguments, a temporary file containing session history is
           created and opened in {EDITOR}. On quitting the editor, all
-          the non commented lines in the file are executed.
+          the non commented lines in the file are executed, if the
+          editor exits with a 0 return code (eg: if editor is `vim`, and
+          you exit using `:cq`, nothing from the buffer is executed and
+          you are returned to the prompt).
 
         - with a filename argument, the file is opened in the editor. On
           close, you are returned bay to the interpreter.
@@ -615,16 +618,20 @@ class ImprovedConsole(InteractiveConsole, object):
             )
 
         # - shell out to the editor
-        os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
+        rc = os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
 
         # - if arg was not provided (ie: we edited history), execute
         # un-commented lines in the current namespace
         if not arg:
-            # - if HISTFILE contents were edited (ie: EDIT_CMD in a
-            # brand new session), don't print commented out lines
-            print_comments = (False if history != self.session_history
-                              else config['POST_EDIT_PRINT_COMMENTS'])
-            self._exec_from_file(filename, print_comments=print_comments)
+            if rc == 0:
+                # - if HISTFILE contents were edited (ie: EDIT_CMD in a
+                # brand new session), don't print commented out lines
+                print_comments = (False if history != self.session_history
+                                  else config['POST_EDIT_PRINT_COMMENTS'])
+                self._exec_from_file(filename, print_comments=print_comments)
+            else:
+                self.writeline('{EDITOR} exited with an error code.'
+                               ' Skipping execution.'.format(**config))
             os.unlink(filename)
 
     @_doc_to_usage
