@@ -59,11 +59,6 @@ try:
 except NameError:
     pass
 
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
-
 import atexit
 import glob
 import importlib
@@ -130,7 +125,9 @@ else:
         sloc = spec.submodule_search_locations
         if orig and not orig.endswith('/__init__.py'):
             return orig
-        if sloc.submodule_search_locations:
+        if isinstance(sloc, list):
+            return sloc[0]
+        elif sloc.submodule_search_locations:
             return sloc.submodule_search_locations[0]
         return orig
 
@@ -305,9 +302,9 @@ class ImprovedConsole(InteractiveConsole, object):
                         rows, cols = map(int, subprocess.check_output(['stty', 'size']).split())
                     except:
                         cols = 80
-                builtins._ = value
                 formatted = format_func(value, width=cols)
                 print(color_dict(formatted) if issubclass(type(value), dict) else blue(formatted))
+            self.locals['_'] = value
 
         sys.displayhook = pprint_callback
 
@@ -668,7 +665,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     (out, err), rc = (process.communicate(), process.returncode)
                     print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
-                    builtins._ = cmd_exec(out, err, rc)
+                    self.locals['_'] = cmd_exec(out, err, rc)
                     del cmd_exec
             except:
                 self.showtraceback()
