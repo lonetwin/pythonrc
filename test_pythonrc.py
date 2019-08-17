@@ -62,8 +62,11 @@ class TestImprovedConsole(TestCase):
         _, pythonrc.config['HISTFILE'] = tempfile.mkstemp()
         self.pymp = pythonrc.ImprovedConsole()
         pythonrc.config['EDITOR'] = 'vi'
-        pythonrc.config['EDIT_CMD'] = '\e'
-        pythonrc.config['LIST_CMD'] = '\l'
+        pythonrc.config['EDIT_CMD'] = r'\e'
+        pythonrc.config['LIST_CMD'] = r'\l'
+        # py27 compatibility
+        if not hasattr(self, 'assertRegex'):
+            self.assertRegex = self.assertRegexpMatches
 
     def test_init(self):
         self.assertEqual(self.pymp.session_history, [])
@@ -71,9 +74,9 @@ class TestImprovedConsole(TestCase):
         self.assertIn('red', dir(pythonrc))
 
     def test_init_color_functions(self):
-        self.assertEquals(pythonrc.red('spam'), '\033[1;31mspam\033[0m')
-        self.assertEquals(pythonrc.green('spam', False), '\033[32mspam\033[0m')
-        self.assertEquals(pythonrc.yellow('spam', False, True),
+        self.assertEqual(pythonrc.red('spam'), '\033[1;31mspam\033[0m')
+        self.assertEqual(pythonrc.green('spam', False), '\033[32mspam\033[0m')
+        self.assertEqual(pythonrc.yellow('spam', False, True),
                           '\001\033[33m\002spam\001\033[0m\002')
 
     @skipIf(sys.version_info[:2] == (3, 5),
@@ -97,8 +100,8 @@ class TestImprovedConsole(TestCase):
             'bind ^I rl_complete')
 
     def test_init_prompt(self):
-        self.assertRegexpMatches(
-            sys.ps1, '\001\033\[1;3[23]m\002>>> \001\033\[0m\002'
+        self.assertRegex(
+            sys.ps1, ('\001\033' r'\[1;3[23]m\002>>> ' '\001\033' r'\[0m\002')
         )
         self.assertEqual(sys.ps2, '\001\033[1;31m\002... \001\033[0m\002')
 
@@ -113,7 +116,7 @@ class TestImprovedConsole(TestCase):
         with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
             sys.displayhook(42)
             sys.displayhook({'spam': 42})
-            self.assertEquals(
+            self.assertEqual(
                 sys.stdout.getvalue(),
                 ("%s\n" "{%s42}\n") % (pythonrc.blue('42'),
                                        pythonrc.purple("'spam': "))
@@ -223,26 +226,26 @@ class TestImprovedConsole(TestCase):
         self.assertEqual(self.pymp._indent, '')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
-                  return_value='\e code')
+                  return_value=r'\e code')
     def test_raw_input_edit_cmd(self, ignored):
         mocked_cmd = Mock()
-        with patch.dict(self.pymp.commands, {'\e': mocked_cmd}):
+        with patch.dict(self.pymp.commands, {r'\e': mocked_cmd}):
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('code')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
-                  return_value='\l shutil')
+                  return_value=r'\l shutil')
     def test_raw_input_list_cmd0(self, ignored):
         mocked_cmd = Mock()
-        with patch.dict(self.pymp.commands, {'\l': mocked_cmd}):
+        with patch.dict(self.pymp.commands, {r'\l': mocked_cmd}):
             ret = self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('shutil')
 
     @patch.object(pythonrc.InteractiveConsole, 'raw_input',
-                  return_value='\l global')
+                  return_value=r'\l global')
     def test_raw_input_list_cmd1(self, ignored):
         mocked_cmd = Mock()
-        with patch.dict(self.pymp.commands, {'\l': mocked_cmd}):
+        with patch.dict(self.pymp.commands, {r'\l': mocked_cmd}):
             self.pymp.raw_input('>>> ')
             mocked_cmd.assert_called_once_with('global')
 
@@ -263,7 +266,7 @@ class TestImprovedConsole(TestCase):
         """Test edit object"""
         with patch.object(pythonrc.os, 'system') as mocked_system:
             self.pymp.process_edit_cmd('pythonrc.ImprovedConsole')
-            self.assertRegexpMatches(mocked_system.call_args[0][0],
+            self.assertRegex(mocked_system.call_args[0][0],
                                      r'vi \+\d+ .*pythonrc.py')
 
     @patch.object(pythonrc.ImprovedConsole, 'lookup', return_value=None)
@@ -271,14 +274,14 @@ class TestImprovedConsole(TestCase):
         """Test edit file"""
         with patch.object(pythonrc.os, 'system') as mocked_system:
             self.pymp.process_edit_cmd('/path/to/file')
-            self.assertRegexpMatches(mocked_system.call_args[0][0],
+            self.assertRegex(mocked_system.call_args[0][0],
                                      r'vi  /path/to/file')
 
     @patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
                   return_value='/tmp/dummy')
     def test_edit_cmd2(self, *ignored):
         """Test edit session"""
-        with patch.object(pythonrc.os, 'system') as mocked_system, \
+        with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
              patch.object(self.pymp, '_exec_from_file') as mocked_exec:
             self.pymp.session_history = 'x = 42'
@@ -294,7 +297,7 @@ class TestImprovedConsole(TestCase):
                   return_value='/tmp/dummy')
     def test_edit_cmd3(self, *ignored):
         """Test edit previous session"""
-        with patch.object(pythonrc.os, 'system') as mocked_system, \
+        with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
              patch.object(self.pymp, '_exec_from_file') as mocked_exec:
             self.pymp.session_history = []
@@ -352,10 +355,10 @@ class TestImprovedConsole(TestCase):
     def test_post_edit_print_comments0(self):
         """Test post edit print comments"""
         with patch('sys.stderr', new_callable=StringIO) as mock_stderr, \
-                patch.object(pythonrc.os, 'system') as mocked_system:
+                patch.object(pythonrc.os, 'system', return_value=0) as mocked_system:
             self.pymp.session_history = ['x = 42']
             self.pymp.process_edit_cmd('')
-            self.assertEquals(
+            self.assertEqual(
                 sys.stderr.getvalue(),
                 pythonrc.grey('... # x = 42', bold=False)
             )
@@ -363,13 +366,13 @@ class TestImprovedConsole(TestCase):
     def test_post_edit_print_comments1(self):
         """Test post edit do not print comments"""
         with patch('sys.stderr', new_callable=StringIO) as mock_stderr, \
-                patch.object(pythonrc.os, 'system') as mocked_system, \
+                patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
                 tempfile.NamedTemporaryFile(mode='w', delete=False) as tempfl:
             tempfl.write('# x = 42\ny = "foo"')
             tempfl.close()
             self.pymp._exec_from_file(tempfl.name, print_comments=False)
             os.unlink(tempfl.name)
-            self.assertEquals(sys.stderr.getvalue(), pythonrc.cyan('... y = "foo"'))
+            self.assertEqual(sys.stderr.getvalue(), pythonrc.cyan('... y = "foo"'))
 
     def test_lookup(self):
         self.pymp.locals['os'] = os
