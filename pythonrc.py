@@ -696,8 +696,16 @@ class ImprovedConsole(InteractiveConsole, object):
             for line_no, line in enumerate(src_lines, offset+1):
                 self.write(cyan("{0:03d}: {1}".format(line_no, line)))
 
-    def process_help_cmd(self, arg=''):
-        print(cyan(self.__doc__).format(**config))
+    def process_help_cmd(self, arg):
+        if arg:
+            if keyword.iskeyword(arg):
+                self.push('help("{}")'.format(arg))
+            elif arg in self.commands:
+                self.commands[arg]('-h')
+            else:
+                self.push('help({})'.format(arg))
+        else:
+            print(cyan(self.__doc__).format(**config))
 
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()

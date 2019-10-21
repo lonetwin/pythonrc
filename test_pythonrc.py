@@ -382,3 +382,16 @@ class TestImprovedConsole(TestCase):
 
         self.assertIs(self.pymp.lookup('subprocess'), None)
         self.assertIs(self.pymp.lookup('subprocess.Popen'), None)
+
+    def test_process_help_cmd(self):
+        with patch('sys.stdout', new_callable=StringIO) as mock_stderr:
+            self.pymp.process_help_cmd('abs')
+            output = sys.stdout.getvalue()
+            self.assertTrue(output.startswith("Help on built-in function abs"))
+
+        with patch('sys.stdout', new_callable=StringIO) as mock_stderr:
+            self.pymp.process_help_cmd('')
+            self.assertEqual(
+                pythonrc.cyan(self.pymp.__doc__.format(**pythonrc.config)),
+                sys.stdout.getvalue().strip()
+            )
