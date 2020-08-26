@@ -116,20 +116,12 @@ if sys.version_info < (3, 7):
     def find_module(name):
         """Search for a module"""
         (_, pkg_path, _) = imp.find_module(name)
-        return pkg_path
+        return [pkg_path]
 else:
     def find_module(name):
         """Search for a module"""
         spec = importlib.util.find_spec(name)
-        orig = spec.origin
-        sloc = spec.submodule_search_locations
-        if orig and not orig.endswith('/__init__.py'):
-            return orig
-        if isinstance(sloc, list):
-            return sloc[0]
-        elif sloc.submodule_search_locations:
-            return sloc.submodule_search_locations[0]
-        return orig
+        return [spec.origin] if not spec.parent else spec.submodule_search_locations
 
 
 class ImprovedConsole(InteractiveConsole, object):
@@ -325,27 +317,31 @@ class ImprovedConsole(InteractiveConsole, object):
         pkglist, modlist = frozenset(pkglist), frozenset(modlist)
 
         def startswith_filter(text, names, striptext=None):
-            if striptext:
-                return [name.replace(striptext, '') for name in names if name.startswith(text)]
-            return [name for name in names if name.startswith(text)]
+            filtered = (name for name in names if name.startswith(text))
+            return (name.replace(striptext, '') for name in filtered) if striptext else filtered
 
         def get_pkg_matches(pkg):
-            pkg_path = find_module(pkg)
+            pkg_paths = find_module(pkg)
             return (name for _, name, _ in pkgutil.walk_packages(
-                [pkg_path], '{}.'.format(pkg), onerror=lambda _: None
+                pkg_paths, '{}.'.format(pkg), onerror=lambda _: None
             ))
 
         def get_path_matches(text):
-            return [
+            return (
                 item+os.path.sep if os.path.isdir(item) else item
-                for item in glob.glob('{}*'.format(text))
-            ]
+                for item in glob.iglob('{}**'.format(text))
+            )
+
+        exceptions = lambda: (exc.__name__ for exc in Exception.__subclasses__())
 
         def complete_wrapper(text, state):
             line = readline.get_line_buffer()
             if line == '' or line.isspace():
                 return None if state > 0 else self.tab
-            if state == 0 and line.startswith(('from ', 'import ')):
+            if state == 0 and line.startswith(('raise ', 'except ')):
+                _, _, text = line.rpartition(' ')
+                completer.matches = startswith_filter(text.strip('('), exceptions())
+            elif state == 0 and line.startswith(('from ', 'import ')):
                 words = line.split()
                 if len(words) <= 2:
                     # import p<tab> / from p<tab>
@@ -366,17 +362,17 @@ class ImprovedConsole(InteractiveConsole, object):
                     if pkg in pkglist:
                         # from pkg.sub import na<tab>
                         match_text = '.'.join((namespace, text))
-                        completer.matches = startswith_filter(
+                        completer.matches = list(startswith_filter(
                             match_text, get_pkg_matches(pkg), '{}.'.format(namespace)
-                        )
+                        ))
                     if not completer.matches:
                         # from module import na<ta>
                         mod = importlib.import_module(namespace)
-                        completer.matches = [
+                        completer.matches = (
                             name for name in startswith_filter(
                                 text, getattr(mod, '__all__', dir(mod))
                             ) if not name.startswith('_')
-                        ]
+                        )
             else:
                 match = completer.complete(text, state)
                 if match is None and os.path.sep in text:
@@ -384,10 +380,11 @@ class ImprovedConsole(InteractiveConsole, object):
                         os.path.expanduser(text)
                         if config.get('COMPLETION_EXPANDS_TILDE') else text
                     )
+            completer.matches = list(completer.matches)
             try:
                 match = completer.matches[state]
                 if keyword.iskeyword(match):
-                    if match in ('else', 'finally', 'try'):
+                    if match.startswith(('else', 'finally', 'try')):
                         return '{}:'.format(match)
                     return '{} '.format(match)
                 return match
@@ -495,8 +492,7 @@ class ImprovedConsole(InteractiveConsole, object):
         return self.write('{}\n'.format(data))
 
     def resetbuffer(self):
-        self._indent = ''
-        previous = ''
+        self._indent = previous = ''
         for line in self.buffer:
             # - replace multiple empty lines with one before writing to session history
             stripped = line.strip()
