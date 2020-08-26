@@ -4,7 +4,7 @@ import os
 import sys
 import tempfile
 
-from unittest import TestCase, skipIf, skipUnless
+from unittest import TestCase, skipIf, skipUnless, main
 
 try:
     from itertools import zip_longest
@@ -316,7 +316,8 @@ class TestImprovedConsole(TestCase):
             mocked_popen.assert_called_once_with(
                 ['ls', '-l', '/dummy/location'],
                 stdout=pythonrc.subprocess.PIPE,
-                stderr=pythonrc.subprocess.PIPE
+                stderr=pythonrc.subprocess.PIPE,
+                env=os.environ
             )
             mocked_popen.return_value.communicate.assert_called_once_with()
 
@@ -395,3 +396,7 @@ class TestImprovedConsole(TestCase):
                 pythonrc.cyan(self.pymp.__doc__.format(**pythonrc.config)),
                 sys.stdout.getvalue().strip()
             )
+
+
+if __name__ == '__main__':
+    main()

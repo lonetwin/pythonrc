@@ -658,7 +658,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     os.chdir(os.path.expanduser(os.path.expandvars(' '.join(cmd[1:]) or '${HOME}')))
                 else:
                     cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
-                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
                     (out, err), rc = (process.communicate(), process.returncode)
                     print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
                     self.locals['_'] = cmd_exec(out, err, rc)
