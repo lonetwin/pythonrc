@@ -5,21 +5,8 @@ import sys
 import tempfile
 
 from unittest import TestCase, skipIf, skipUnless, main
-
-try:
-    from itertools import zip_longest
-except ImportError:
-    from itertools import izip_longest as zip_longest
-
-try:
-    from unittest.mock import patch, Mock
-except ImportError:
-    from mock import patch, Mock
-
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
+from unittest.mock import patch, Mock
+from io import StringIO
 
 
 os.environ['SKIP_PYMP'] = "1"
@@ -27,7 +14,7 @@ os.environ['SKIP_PYMP'] = "1"
 
 import pythonrc
 
-EDIT_CMD_TEST_LINES="""
+EDIT_CMD_TEST_LINES = """
 
 x = 42
 class Foo(object):
@@ -59,11 +46,11 @@ z = 123
 class TestImprovedConsole(TestCase):
 
     def setUp(self):
-        _, pythonrc.config['HISTFILE'] = tempfile.mkstemp()
+        _, pythonrc.config.HISTFILE = tempfile.mkstemp()
         self.pymp = pythonrc.ImprovedConsole()
-        pythonrc.config['EDITOR'] = 'vi'
-        pythonrc.config['EDIT_CMD'] = r'\e'
-        pythonrc.config['LIST_CMD'] = r'\l'
+        pythonrc.config.EDITOR = 'vi'
+        pythonrc.config.EDIT_CMD = r'\e'
+        pythonrc.config.LIST_CMD = r'\l'
         # py27 compatibility
         if not hasattr(self, 'assertRegex'):
             self.assertRegex = self.assertRegexpMatches
@@ -77,27 +64,25 @@ class TestImprovedConsole(TestCase):
         self.assertEqual(pythonrc.red('spam'), '\033[1;31mspam\033[0m')
         self.assertEqual(pythonrc.green('spam', False), '\033[32mspam\033[0m')
         self.assertEqual(pythonrc.yellow('spam', False, True),
-                          '\001\033[33m\002spam\001\033[0m\002')
+                         '\001\033[33m\002spam\001\033[0m\002')
 
     @skipIf(sys.version_info[:2] == (3, 5),
             "mock.assert_called_once doesn't exist in 3.5")
     @patch('pythonrc.readline')
     def test_init_readline(self, mock_readline):
-        pymp = pythonrc.ImprovedConsole()
+        pythonrc.ImprovedConsole()
         for method in [mock_readline.set_history_length,
                        mock_readline.parse_and_bind,
                        mock_readline.set_completer,
                        mock_readline.set_pre_input_hook,
-                       mock_readline.read_init_file
-                      ]:
+                       mock_readline.read_init_file]:
             method.assert_called_once()
 
     @patch('pythonrc.readline')
     def test_libedit_readline(self, mock_readline):
         mock_readline.__doc__ = 'libedit'
-        pymp = pythonrc.ImprovedConsole()
-        mock_readline.parse_and_bind.assert_called_once_with(
-            'bind ^I rl_complete')
+        pythonrc.ImprovedConsole()
+        mock_readline.parse_and_bind.assert_called_once_with('bind ^I rl_complete')
 
     def test_init_prompt(self):
         self.assertRegex(
@@ -113,7 +98,7 @@ class TestImprovedConsole(TestCase):
 
     def test_init_pprint(self):
         self.assertEqual(sys.displayhook.__name__, 'pprint_callback')
-        with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+        with patch('sys.stdout', new_callable=StringIO):
             sys.displayhook(42)
             sys.displayhook({'spam': 42})
             self.assertEqual(
@@ -125,7 +110,7 @@ class TestImprovedConsole(TestCase):
     @skipUnless(sys.version_info.major >= 3 and sys.version_info.minor > 3,
                 'compact option does not exist for pprint in python < 3.3')
     def test_pprint_compact(self):
-        with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+        with patch('sys.stdout', new_callable=StringIO):
 
             # - test compact pprint-ing with 80x25 terminal
             with patch.object(pythonrc.subprocess, 'check_output',
@@ -142,7 +127,7 @@ class TestImprovedConsole(TestCase):
                 self.assertIn('21, 22]', sys.stdout.getvalue())
 
     def test_completer(self):
-        completer = self.pymp.improved_rlcompleter()
+        completer = self.pymp.completer.complete
         rl = pythonrc.readline
 
         # - no leading characters
@@ -199,7 +184,7 @@ class TestImprovedConsole(TestCase):
         mock_isdir = lambda path: not (path == '/home/test/foo')
 
         with patch.object(rl, 'get_line_buffer', side_effect=mock_input_line), \
-             patch.object(pythonrc.glob, 'glob', side_effect=mock_globs), \
+             patch.object(pythonrc.glob, 'iglob', side_effect=mock_globs), \
              patch.object(pythonrc.os.path, 'isdir', side_effect=mock_isdir):
             self.assertEqual(completer('/', 0), '/bin/')
             self.assertEqual(completer('/', 1), '/home/')
@@ -252,13 +237,13 @@ class TestImprovedConsole(TestCase):
     def test_increase_indent(self):
         for count, char in enumerate(['if True:', '\t[', '{', '('], 1):
             self.pymp.push(char)
-            self.assertEqual(self.pymp._indent, self.pymp.tab*count)
+            self.assertEqual(self.pymp._indent, pythonrc.config.ONE_INDENT*count)
 
     def test_donot_crash_on_empty_continuation(self):
         self.pymp.push('if True:')
-        self.assertEqual(self.pymp._indent, self.pymp.tab)
+        self.assertEqual(self.pymp._indent, pythonrc.config.ONE_INDENT)
         self.pymp.push('')
-        self.assertEqual(self.pymp._indent, self.pymp.tab)
+        self.assertEqual(self.pymp._indent, pythonrc.config.ONE_INDENT)
 
     @patch.object(pythonrc.ImprovedConsole, 'lookup',
                   return_value=pythonrc.ImprovedConsole)
@@ -277,49 +262,52 @@ class TestImprovedConsole(TestCase):
             self.assertRegex(mocked_system.call_args[0][0],
                                      r'vi  /path/to/file')
 
-    @patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
-                  return_value='/tmp/dummy')
     def test_edit_cmd2(self, *ignored):
         """Test edit session"""
+        tempfl = StringIO()
+        tempfl.name = "/tmp/dummy"
         with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
-             patch.object(self.pymp, '_exec_from_file') as mocked_exec:
+             patch.object(self.pymp, '_exec_from_file') as mocked_exec, \
+             patch.object(__builtins__, 'open', return_value=tempfl), \
+             patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
+                          return_value=tempfl.name):
             self.pymp.session_history = 'x = 42'
             self.pymp.process_edit_cmd('')
-            mocked_system.assert_called_once_with('vi  /tmp/dummy')
-            mocked_unlink.assert_called_once_with('/tmp/dummy')
+            mocked_system.assert_called_once_with(f'vi  {tempfl.name}')
+            mocked_unlink.assert_called_once_with(tempfl.name)
             mocked_exec.assert_called_once_with(
-                '/tmp/dummy',
-                print_comments=pythonrc.config['POST_EDIT_PRINT_COMMENTS']
+                tempfl, print_comments=pythonrc.config.POST_EDIT_PRINT_COMMENTS
             )
 
-    @patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
-                  return_value='/tmp/dummy')
     def test_edit_cmd3(self, *ignored):
         """Test edit previous session"""
+        tempfl = StringIO()
+        tempfl.name = "/tmp/dummy"
         with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
-             patch.object(self.pymp, '_exec_from_file') as mocked_exec:
+             patch.object(self.pymp, '_exec_from_file') as mocked_exec, \
+             patch.object(__builtins__, 'open', return_value=tempfl), \
+             patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
+                          return_value=tempfl.name):
             self.pymp.session_history = []
             self.pymp.process_edit_cmd('')
-            mocked_system.assert_called_once_with('vi  /tmp/dummy')
-            mocked_unlink.assert_called_once_with('/tmp/dummy')
-            mocked_exec.assert_called_once_with('/tmp/dummy', print_comments=False)
+            mocked_system.assert_called_once_with(f'vi  {tempfl.name}')
+            mocked_unlink.assert_called_once_with(tempfl.name)
+            mocked_exec.assert_called_once_with(tempfl, print_comments=False)
 
     def test_sh_exec0(self):
         """Test sh exec with command and argument"""
         self.pymp.locals['path'] = "/dummy/location"
-        with patch('pythonrc.subprocess.Popen') as mocked_popen:
-            mocked_popen.return_value.communicate = Mock(return_value=('foo', 'bar'))
-            mocked_popen.return_value.returncode = 0
+        with patch('pythonrc.subprocess.run') as mocked_run, \
+                patch.object(sys, 'stdout', new_callable=StringIO):
             self.pymp.process_sh_cmd('ls -l {path}')
-            mocked_popen.assert_called_once_with(
+            mocked_run.assert_called_once_with(
                 ['ls', '-l', '/dummy/location'],
-                stdout=pythonrc.subprocess.PIPE,
-                stderr=pythonrc.subprocess.PIPE,
-                env=os.environ
+                capture_output=True,
+                env=os.environ,
+                text=True
             )
-            mocked_popen.return_value.communicate.assert_called_once_with()
 
     @patch.object(pythonrc.os, 'chdir')
     def test_sh_exec1(self, mocked_chdir):
@@ -333,19 +321,17 @@ class TestImprovedConsole(TestCase):
     def test_exec_from_file(self):
         """Test exec from file with multiple newlines in code blocks"""
         pymp = pythonrc.ImprovedConsole()
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tempfl:
-            tempfl.write(EDIT_CMD_TEST_LINES)
-            tempfl.close()
-            pymp._exec_from_file(tempfl.name)
-            os.unlink(tempfl.name)
+        tempfl = StringIO(EDIT_CMD_TEST_LINES)
+        with patch.object(sys, 'stderr', new_callable=StringIO):
+            pymp._exec_from_file(tempfl)
 
-            self.assertIn('Foo', pymp.locals)
-            self.assertIn('first', pymp.locals['Foo'].__dict__)
-            self.assertIn('second', pymp.locals['Foo'].__dict__)
-            self.assertIn('x', pymp.locals)
-            self.assertIn('f', pymp.locals)
-            self.assertEqual(pymp.locals['x'], 43)
-            self.assertNotIn('z', pymp.locals)
+        self.assertIn('Foo', pymp.locals)
+        self.assertIn('first', pymp.locals['Foo'].__dict__)
+        self.assertIn('second', pymp.locals['Foo'].__dict__)
+        self.assertIn('x', pymp.locals)
+        self.assertIn('f', pymp.locals)
+        self.assertEqual(pymp.locals['x'], 43)
+        self.assertNotIn('z', pymp.locals)
 
         with tempfile.NamedTemporaryFile(mode='w') as tempfl:
             pythonrc.readline.write_history_file(tempfl.name)
@@ -355,25 +341,22 @@ class TestImprovedConsole(TestCase):
 
     def test_post_edit_print_comments0(self):
         """Test post edit print comments"""
-        with patch('sys.stderr', new_callable=StringIO) as mock_stderr, \
-                patch.object(pythonrc.os, 'system', return_value=0) as mocked_system:
+        with patch.object(sys, 'stderr', new_callable=StringIO) as mock_stderr, \
+                patch.object(pythonrc.os, 'system', return_value=0):
             self.pymp.session_history = ['x = 42']
             self.pymp.process_edit_cmd('')
             self.assertEqual(
-                sys.stderr.getvalue(),
+                mock_stderr.getvalue(),
                 pythonrc.grey('... # x = 42', bold=False)
             )
 
     def test_post_edit_print_comments1(self):
         """Test post edit do not print comments"""
-        with patch('sys.stderr', new_callable=StringIO) as mock_stderr, \
-                patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
-                tempfile.NamedTemporaryFile(mode='w', delete=False) as tempfl:
-            tempfl.write('# x = 42\ny = "foo"')
-            tempfl.close()
-            self.pymp._exec_from_file(tempfl.name, print_comments=False)
-            os.unlink(tempfl.name)
-            self.assertEqual(sys.stderr.getvalue(), pythonrc.cyan('... y = "foo"'))
+        with patch.object(sys, 'stderr', new_callable=StringIO) as mock_stderr, \
+                patch.object(pythonrc.os, 'system', return_value=0):
+            tempfl = StringIO('# x = 42\ny = "foo"')
+            self.pymp._exec_from_file(tempfl, print_comments=False)
+            self.assertEqual(mock_stderr.getvalue(), pythonrc.cyan('... y = "foo"'))
 
     def test_lookup(self):
         self.pymp.locals['os'] = os
@@ -390,11 +373,11 @@ class TestImprovedConsole(TestCase):
             output = sys.stdout.getvalue()
             self.assertTrue(output.startswith("Help on built-in function abs"))
 
-        with patch('sys.stdout', new_callable=StringIO) as mock_stderr:
+        with patch.object(sys, 'stdout', new_callable=StringIO) as mock_stderr:
             self.pymp.process_help_cmd('')
             self.assertEqual(
-                pythonrc.cyan(self.pymp.__doc__.format(**pythonrc.config)),
-                sys.stdout.getvalue().strip()
+                pythonrc.cyan(self.pymp.__doc__.format(**pythonrc.config.__dict__)),
+                mock_stderr.getvalue().strip()
             )
 
 

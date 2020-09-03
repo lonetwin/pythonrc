@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 100
+# E402: module level import not at top of file
+# E221: multiple spaces before operator
+# E251: unexpected spaces around keyword / parameter equals
+ignore = E402,E221,E251

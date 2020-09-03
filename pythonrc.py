@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # The MIT License (MIT)
 #
-# Copyright (c) 2015-2019 Steven Fernandez
+# Copyright (c) 2015-2020 Steven Fernandez
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -76,55 +76,162 @@ import subprocess
 import webbrowser
 
 from code import InteractiveConsole
-from collections import namedtuple
-from functools import partial
+from functools import partial, lru_cache, cached_property
+from itertools import chain
+from operator import attrgetter
 from tempfile import NamedTemporaryFile
+from types import SimpleNamespace
+
+__version__ = "0.9.0"
 
 
-__version__ = "0.8.4"
-
-
-config = dict(
-    HISTFILE = os.path.expanduser("~/.python_history"),
-    HISTSIZE = -1,
-    EDITOR   = os.getenv('EDITOR', 'vi'),
-    SHELL    = os.getenv('SHELL', '/bin/bash'),
-    EDIT_CMD = r'\e',
-    SH_EXEC  = '!',
-    DOC_CMD  = '?',
-    DOC_URL  = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
-    HELP_CMD = r'\h',
-    LIST_CMD = r'\l',
-    # - Should we auto-indent by default
-    AUTO_INDENT = True,
-    # - Run-time toggle for auto-indent command (eg: when pasting code)
-    TOGGLE_AUTO_INDENT_CMD = r'\\',
-    VENV_RC  = os.getenv("VENV_RC", ".venv_rc.py"),
+config = SimpleNamespace(
+    ONE_INDENT  = '    ',  # what should we use for indentation ?
+    HISTFILE    = os.path.expanduser("~/.python_history"),
+    HISTSIZE    = -1,
+    EDITOR      = os.getenv('EDITOR', 'vi'),
+    SHELL       = os.getenv('SHELL', '/bin/bash'),
+    EDIT_CMD    = r'\e',
+    SH_EXEC     = '!',
+    DOC_CMD     = '?',
+    DOC_URL     = "https://docs.python.org/{sys.version_info.major}/search.html?q={term}",
+    HELP_CMD    = r'\h',
+    LIST_CMD    = r'\l',
+    AUTO_INDENT = True,     # - Should we auto-indent by default
+    VENV_RC     = os.getenv("VENV_RC", ".venv_rc.py"),
     # - option to pass to the editor to open a file at a specific
     # `line_no`. This is used when the EDIT_CMD is invoked with a python
     # object to open the source file for the object.
-    LINE_NUM_OPT = "+{line_no}",
+    LINE_NUM_OPT="+{line_no}",
+    # - Run-time toggle for auto-indent command (eg: when pasting code)
+    TOGGLE_AUTO_INDENT_CMD = r'\\',
     # - should path completion expand ~ using os.path.expanduser()
     COMPLETION_EXPANDS_TILDE = True,
     # - when executing edited history, should we also print comments
     POST_EDIT_PRINT_COMMENTS = True,
 )
 
-
-if sys.version_info < (3, 7):
-    import imp
-    def find_module(name):
-        """Search for a module"""
-        (_, pkg_path, _) = imp.find_module(name)
-        return [pkg_path]
-else:
-    def find_module(name):
-        """Search for a module"""
-        spec = importlib.util.find_spec(name)
-        return [spec.origin] if not spec.parent else spec.submodule_search_locations
+# Color functions. These get initialized in init_color_functions() later
+red = green = yellow = blue = purple = cyan = grey = str
 
 
-class ImprovedConsole(InteractiveConsole, object):
+class ImprovedCompleter(rlcompleter.Completer):
+    """A smarter rlcompleter.Completer"""
+
+    def __init__(self, namespace=None):
+        super().__init__(namespace)
+        # - remove '/' and '~' from delimiters to help with path completion
+        completer_delims = readline.get_completer_delims()
+        completer_delims = completer_delims.replace('/', '')
+        if config.COMPLETION_EXPANDS_TILDE:
+            completer_delims = completer_delims.replace('~', '')
+        readline.set_completer_delims(completer_delims)
+        self.matches = []
+
+    @lru_cache(None)
+    def pkg_contents(self, pkg):
+        """Given a package name, return a list of it's sub-modules."""
+        spec = importlib.util.find_spec(pkg)
+        locs = [spec.origin] if not spec.parent else spec.submodule_search_locations
+        return [pkg.name for pkg in pkgutil.walk_packages(locs, f'{pkg}.', onerror=lambda _: None)]
+
+    @cached_property
+    def pkglist(self):
+        return frozenset(item.name for item in pkgutil.iter_modules() if item.ispkg)
+
+    @cached_property
+    def modlist(self):
+        modlist = chain(sys.builtin_module_names, map(attrgetter('name'), pkgutil.iter_modules()))
+        return frozenset(name for name in modlist if not name.startswith('_'))
+
+    def exceptions(self, exc_cls=Exception):
+        exc_names = [exc.__name__ for exc in exc_cls.__subclasses__()]
+        for sub_cls in exc_cls.__subclasses__():
+            exc_names.extend(self.exceptions(sub_cls))
+        return exc_names
+
+    def startswith_filter(self, text, names, striptext=None):
+        filtered = [name for name in names if name.startswith(text)]
+        if striptext:
+            return [name.replace(striptext, '') for name in filtered]
+        return filtered
+
+    def get_path_matches(self, text):
+        return [f'{item}{os.path.sep}' if os.path.isdir(item) else item
+                for item in glob.iglob(f'{text}**')]
+
+    def get_import_matches(self, text, words):
+        if any([(len(words) == 2 and not text),
+                (len(words) == 3 and text and 'import'.startswith(text))]):
+            return ['import ']
+
+        if len(words) <= 2:
+            # import p<tab> / from p<tab>
+            modname, _, _ = text.partition('.')
+            if modname in self.pkglist:
+                return self.startswith_filter(text, self.pkg_contents(modname))
+            return self.startswith_filter(text, self.modlist)
+
+        if len(words) >= 3 and words[2] == 'import':
+            # from pkg.sub import na<tab>
+            namespace = words[1]
+            pkg, _, _ = namespace.partition('.')
+            if pkg in self.pkglist:
+                # from pkg.sub import na<tab>
+                match_text = '.'.join((namespace, text))
+                if (
+                    matches := self.startswith_filter(
+                        match_text, self.pkg_contents(pkg), striptext=f'{namespace}.'
+                    )
+                ):
+                    return matches
+
+            # from module import na<ta>
+            mod = importlib.import_module(namespace)
+            return self.startswith_filter(text, getattr(mod, '__all__', dir(mod)))
+
+    def complete(self, text, state, line=None):
+        if not line:
+            line = readline.get_line_buffer()
+
+        if line == '' or line.isspace():
+            return None if state else config.ONE_INDENT
+
+        words = line.split()
+        if state == 0:
+            # - this is the first completion is being attempted for
+            # text, we need to populate self.matches, just like
+            # super().complete()
+            if line.startswith(('from ', 'import ')):
+                self.matches = self.get_import_matches(text, words)
+            elif words[0] in ('raise', 'except'):
+                self.matches = self.startswith_filter(text.lstrip('('), self.exceptions())
+            elif os.path.sep in text:
+                self.matches = self.get_path_matches(
+                    os.path.expanduser(text) if config.COMPLETION_EXPANDS_TILDE else text
+                )
+            elif "." in text:
+                self.matches = self.attr_matches(text)
+            else:
+                self.matches = self.global_matches(text)
+
+            if self.matches and self.matches[-1] is None:
+                match = self.matches[0]
+                if keyword.iskeyword(match) and match in ('raise', 'except'):
+                    self.matches = self.exceptions()
+
+                if match and match.endswith(os.path.sep):
+                    self.matches = self.get_path_matches(match)
+
+            self.matches.append(None)
+
+        try:
+            return self.matches[state]
+        except IndexError:
+            return None
+
+
+class ImprovedConsole(InteractiveConsole):
     """
     Welcome to lonetwin's pimped up python prompt
 
@@ -160,13 +267,12 @@ class ImprovedConsole(InteractiveConsole, object):
     Try `<cmd> -h` for any of the commands to learn more.
 
     The EDITOR, SHELL, command names and more can be changed in the
-    config dict at the top of this file. Make this your own !
+    config declaration at the top of this file. Make this your own !
     """
 
-    def __init__(self, tab='    ', *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.session_history = []  # This holds the last executed statements
         self.buffer = []           # This holds the statement to be executed
-        self.tab = tab
         self._indent = ''
         super(ImprovedConsole, self).__init__(*args, **kwargs)
         self.init_color_functions()
@@ -175,15 +281,15 @@ class ImprovedConsole(InteractiveConsole, object):
         self.init_pprint()
         # - dict mapping commands to their handler methods
         self.commands = {
-            config['EDIT_CMD']: self.process_edit_cmd,
-            config['LIST_CMD']: self.process_list_cmd,
-            config['SH_EXEC']: self.process_sh_cmd,
-            config['HELP_CMD']: self.process_help_cmd,
-            config['TOGGLE_AUTO_INDENT_CMD']: self.toggle_auto_indent
+            config.EDIT_CMD: self.process_edit_cmd,
+            config.LIST_CMD: self.process_list_cmd,
+            config.SH_EXEC: self.process_sh_cmd,
+            config.HELP_CMD: self.process_help_cmd,
+            config.TOGGLE_AUTO_INDENT_CMD: self.toggle_auto_indent
         }
         # - regex to identify and extract commands and their arguments
         self.commands_re = re.compile(
-            r'({})\s*([^(]*)'.format(
+            r'(?P<cmd>{})\s*(?P<args>[^(]*)'.format(
                 '|'.join(re.escape(cmd) for cmd in self.commands)
             )
         )
@@ -192,7 +298,7 @@ class ImprovedConsole(InteractiveConsole, object):
         def inner(self, arg):
             arg = arg.strip()
             if arg.startswith(('-h', '--help')):
-                return self.writeline(blue(method.__doc__.strip().format(**config)))
+                return self.writeline(blue(method.__doc__.strip()))
             return method(self, arg)
         return inner
 
@@ -204,18 +310,24 @@ class ImprovedConsole(InteractiveConsole, object):
             color = '\033[{0}{1}m'.format('1;' if bold else '', color_code)
             # - reason for readline_workaround: http://bugs.python.org/issue20359
             if readline_workaround:
-                color = '\001{color}\002'.format(color=color)
-                reset = '\001{reset}\002'.format(reset=reset)
-            return "{color}{text}{reset}".format(**vars())
+                return f"\001{color}\002{text}\001{reset}\002"
+            return f"{color}{text}{reset}"
 
         g = globals()
-        for code, color in enumerate(['red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'grey'], 31):
+        for code, color in enumerate(
+            ['red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'grey'], 31
+        ):
             g[color] = partial(colorize, code)
 
     def init_readline(self):
         """Activates history and tab completion
         """
-        # - mainly borrowed from site.enablerlcompleter() from py3.4+
+        # - 1. history stuff
+        # - mainly borrowed from site.enablerlcompleter() from py3.4+,
+        # we can't simply call site.enablerlcompleter() because its
+        # implementation overwrites the history file for each python
+        # session whereas we prefer appending history from every
+        # (potentially concurrent) session.
 
         # Reading the initialization (config) file may not be enough to set a
         # completion key, so we set one first and then read the file.
@@ -234,32 +346,32 @@ class ImprovedConsole(InteractiveConsole, object):
             # want to ignore the exception.
             pass
 
+        def append_history(len_at_start):
+            current_len = readline.get_current_history_length()
+            readline.append_history_file(current_len - len_at_start, config.HISTFILE)
+
         if readline.get_current_history_length() == 0:
             # If no history was loaded, default to .python_history.
             # The guard is necessary to avoid doubling history size at
             # each interpreter exit when readline was already configured
             # see: http://bugs.python.org/issue5845#msg198636
             try:
-                readline.read_history_file(config['HISTFILE'])
+                readline.read_history_file(config.HISTFILE)
             except IOError:
                 pass
-            atexit.register(readline.write_history_file,
-                            config['HISTFILE'])
-        readline.set_history_length(config['HISTSIZE'])
+            len_at_start = readline.get_current_history_length()
+            atexit.register(append_history, len_at_start)
 
-        # - replace default completer
-        readline.set_completer(self.improved_rlcompleter())
+        readline.set_history_length(config.HISTSIZE)
 
-        # - enable auto-indenting
-        if config['AUTO_INDENT']:
+        # - 2. enable auto-indenting
+        if config.AUTO_INDENT:
             readline.set_pre_input_hook(self.auto_indent_hook)
 
-        # - remove '/' and '~' from delimiters to help with path completion
-        completer_delims = readline.get_completer_delims()
-        completer_delims = completer_delims.replace('/', '')
-        if config.get('COMPLETION_EXPANDS_TILDE'):
-            completer_delims = completer_delims.replace('~', '')
-        readline.set_completer_delims(completer_delims)
+        # - 3. completion
+        # - replace default completer
+        self.completer = ImprovedCompleter(self.locals)
+        readline.set_completer(self.completer.complete)
 
     def init_prompt(self):
         """Activates color on the prompt based on python version.
@@ -273,8 +385,8 @@ class ImprovedConsole(InteractiveConsole, object):
         # - if we are over a remote connection, modify the ps1
         if os.getenv('SSH_CONNECTION'):
             _, _, this_host, _ = os.getenv('SSH_CONNECTION').split()
-            sys.ps1 = prompt_color('[{}]>>> '.format(this_host), readline_workaround=True)
-            sys.ps2 = red('[{}]... '.format(this_host), readline_workaround=True)
+            sys.ps1 = prompt_color(f'[{this_host}]>>> ', readline_workaround=True)
+            sys.ps2 = red(f'[{this_host}]... ', readline_workaround=True)
 
     def init_pprint(self):
         """Activates pretty-printing of output values.
@@ -292,110 +404,13 @@ class ImprovedConsole(InteractiveConsole, object):
                 except AttributeError:
                     try:
                         rows, cols = map(int, subprocess.check_output(['stty', 'size']).split())
-                    except:
+                    except Exception:
                         cols = 80
                 formatted = format_func(value, width=cols)
                 print(color_dict(formatted) if issubclass(type(value), dict) else blue(formatted))
             self.locals['_'] = value
 
         sys.displayhook = pprint_callback
-
-    def improved_rlcompleter(self):
-        """Enhances the default rlcompleter
-
-        The function enhances the default rlcompleter by also doing
-        pathname completion and module name completion for import
-        statements. Additionally, it inserts a tab instead of attempting
-        completion if there is no preceding text.
-        """
-        completer = rlcompleter.Completer(namespace=self.locals)
-        pkglist, modlist = [], []
-        for _, name, ispkg in pkgutil.iter_modules():
-            modlist.append(name)
-            if ispkg:
-                pkglist.append(name)
-        pkglist, modlist = frozenset(pkglist), frozenset(modlist)
-
-        def startswith_filter(text, names, striptext=None):
-            filtered = (name for name in names if name.startswith(text))
-            return (name.replace(striptext, '') for name in filtered) if striptext else filtered
-
-        def get_pkg_matches(pkg):
-            pkg_paths = find_module(pkg)
-            return (name for _, name, _ in pkgutil.walk_packages(
-                pkg_paths, '{}.'.format(pkg), onerror=lambda _: None
-            ))
-
-        def get_path_matches(text):
-            return (
-                item+os.path.sep if os.path.isdir(item) else item
-                for item in glob.iglob('{}**'.format(text))
-            )
-
-        exceptions = lambda: (exc.__name__ for exc in Exception.__subclasses__())
-
-        def complete_wrapper(text, state):
-            line = readline.get_line_buffer()
-            if line == '' or line.isspace():
-                return None if state > 0 else self.tab
-            if state == 0 and line.startswith(('raise ', 'except ')):
-                _, _, text = line.rpartition(' ')
-                completer.matches = startswith_filter(text.strip('('), exceptions())
-            elif state == 0 and line.startswith(('from ', 'import ')):
-                words = line.split()
-                if len(words) <= 2:
-                    # import p<tab> / from p<tab>
-                    modname, _, _ = text.partition('.')
-                    completer.matches = startswith_filter(
-                        text, (get_pkg_matches(modname) if modname in pkglist else modlist)
-                    )
-
-                if len(words) >= 2 and words[0] == 'from' and 'import'.startswith(text):
-                    # from pkg.sub im<tab>
-                    completer.matches = ['import']
-
-                if len(words) >= 3 and words[2] == 'import':
-                    # from pkg.sub import na<tab>
-                    completer.matches = []
-                    namespace = words[1]
-                    pkg, _, _ = namespace.partition('.')
-                    if pkg in pkglist:
-                        # from pkg.sub import na<tab>
-                        match_text = '.'.join((namespace, text))
-                        completer.matches = list(startswith_filter(
-                            match_text, get_pkg_matches(pkg), '{}.'.format(namespace)
-                        ))
-                    if not completer.matches:
-                        # from module import na<ta>
-                        mod = importlib.import_module(namespace)
-                        completer.matches = (
-                            name for name in startswith_filter(
-                                text, getattr(mod, '__all__', dir(mod))
-                            ) if not name.startswith('_')
-                        )
-            else:
-                match = completer.complete(text, state)
-                if match is None and os.path.sep in text:
-                    completer.matches = get_path_matches(
-                        os.path.expanduser(text)
-                        if config.get('COMPLETION_EXPANDS_TILDE') else text
-                    )
-            completer.matches = list(completer.matches)
-            try:
-                match = completer.matches[state]
-                if keyword.iskeyword(match):
-                    if match.startswith(('else', 'finally', 'try')):
-                        return '{}:'.format(match)
-                    return '{} '.format(match)
-                return match
-            except IndexError:
-                # - if we just completed a directory, switch to matching its contents
-                matched = completer.matches[0]
-                if matched.endswith(os.path.sep):
-                    completer.matches = get_path_matches(matched)
-                    return completer.matches[state] if completer.matches else None
-                return None
-        return complete_wrapper
 
     def auto_indent_hook(self):
         """Hook called by readline between printing the prompt and
@@ -406,18 +421,18 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def toggle_auto_indent(self, _):
-        """{TOGGLE_AUTO_INDENT_CMD} - Toggles the auto-indentation behavior
+        """{config.TOGGLE_AUTO_INDENT_CMD} - Toggles the auto-indentation behavior
         """
-        hook = None if config['AUTO_INDENT'] else self.auto_indent_hook
+        hook = None if config.AUTO_INDENT else self.auto_indent_hook
         msg = '# Auto-Indent has been {}abled\n'.format('en' if hook else 'dis')
-        config['AUTO_INDENT'] = bool(hook)
+        config.AUTO_INDENT = bool(hook)
 
         if hook is None:
             msg += ('# End of blocks will be detected after 3 empty lines\n'
-                    '# Re-type {TOGGLE_AUTO_INDENT_CMD} on a line by itself to enable')
+                    f'# Re-type {config.TOGGLE_AUTO_INDENT_CMD} on a line by itself to enable')
 
         readline.set_pre_input_hook(hook)
-        print(grey(msg.format(**config), bold=False))
+        print(grey(msg, bold=False))
         return ''
 
     def raw_input(self, prompt=''):
@@ -425,34 +440,33 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         line = super(ImprovedConsole, self).raw_input(prompt)
         empty_lines = 3 if line else 1
-        while not config['AUTO_INDENT'] and empty_lines < 3:
+        while not config.AUTO_INDENT and empty_lines < 3:
             line = super(ImprovedConsole, self).raw_input(prompt)
             empty_lines += 1 if not line else 3
         return self._cmd_handler(line)
 
     def _cmd_handler(self, line):
-        matches = self.commands_re.match(line)
-        if matches:
+        if (matches := self.commands_re.match(line)):
             command, args = matches.groups()
             line = self.commands[command](args)
-        elif line.endswith(config['DOC_CMD']):
-            if line.endswith(config['DOC_CMD']*2):
+        elif line.endswith(config.DOC_CMD):
+            if line.endswith(config.DOC_CMD * 2):
                 # search for line in online docs
                 # - strip off the '??' and the possible tab-completed
                 # '(' or '.' and replace inner '.' with '+' to create the
-                # query search string
-                line = line.rstrip(config['DOC_CMD'] + '.(').replace('.', '+')
-                webbrowser.open(config['DOC_URL'].format(sys=sys, term=line))
+                # search query string
+                line = line.rstrip(f'{config.DOC_CMD}.(').replace('.', '+')
+                webbrowser.open(config.DOC_URL.format(sys=sys, term=line))
                 line = ''
             else:
-                line = line.rstrip(config['DOC_CMD'] + '.(')
+                line = line.rstrip(f'{config.DOC_CMD}.(')
                 if not line:
                     line = 'dir()'
                 elif keyword.iskeyword(line):
-                    line = 'help("{}")'.format(line)
+                    line = f'help("{line}")'
                 else:
-                    line = 'print({}.__doc__)'.format(line)
-        elif config['AUTO_INDENT'] and (line.startswith(self.tab) or self._indent):
+                    line = f'print({line}.__doc__)'
+        elif config.AUTO_INDENT and (line.startswith(config.ONE_INDENT) or self._indent):
             if line.strip():
                 # if non empty line with an indent, check if the indent
                 # level has been changed
@@ -462,7 +476,7 @@ class ImprovedConsole(InteractiveConsole, object):
                     self._indent = leading_space
             else:
                 # - empty line, decrease indent
-                self._indent = self._indent[:-len(self.tab)]
+                self._indent = self._indent[:-len(config.ONE_INDENT)]
                 line = self._indent
         elif line.startswith('%'):
             self.writeline('Y U NO LIKE ME?')
@@ -473,10 +487,9 @@ class ImprovedConsole(InteractiveConsole, object):
         """Wrapper around InteractiveConsole's push method for adding an
         indent on start of a block.
         """
-        more = super(ImprovedConsole, self).push(line)
-        if more:
+        if (more := super(ImprovedConsole, self).push(line)):
             if line.endswith((':', '[', '{', '(')):
-                self._indent += self.tab
+                self._indent += config.ONE_INDENT
         else:
             self._indent = ''
         return more
@@ -489,7 +502,7 @@ class ImprovedConsole(InteractiveConsole, object):
     def writeline(self, data):
         """Same as write but adds a newline to the end
         """
-        return self.write('{}\n'.format(data))
+        return self.write(f'{data}\n')
 
     def resetbuffer(self):
         self._indent = previous = ''
@@ -500,7 +513,6 @@ class ImprovedConsole(InteractiveConsole, object):
                 self.session_history.append(line)
             previous = stripped
         return super(ImprovedConsole, self).resetbuffer()
-
 
     def _mktemp_buffer(self, lines):
         """Writes lines to a temp file and returns the filename.
@@ -519,11 +531,11 @@ class ImprovedConsole(InteractiveConsole, object):
         self._skip_subsequent = True
         return super(ImprovedConsole, self).showtraceback(*args)
 
-    def _exec_from_file(self, filename, quiet=False, skip_history=False,
-                        print_comments=config['POST_EDIT_PRINT_COMMENTS']):
+    def _exec_from_file(self, open_fd, quiet=False, skip_history=False,
+                        print_comments=config.POST_EDIT_PRINT_COMMENTS):
         self._skip_subsequent = False
         previous = ''
-        for stmt in open(filename):
+        for stmt in open_fd:
             # - skip over multiple empty lines
             stripped = stmt.strip()
             if stripped == previous == '':
@@ -533,7 +545,7 @@ class ImprovedConsole(InteractiveConsole, object):
             # next line
             if stripped.startswith('#'):
                 if print_comments and not quiet:
-                    self.write(grey("... {}".format(stmt), bold=False))
+                    self.write(grey(f"... {stmt}", bold=False))
                 continue
 
             # - process line only if we haven't encountered an error yet
@@ -548,7 +560,7 @@ class ImprovedConsole(InteractiveConsole, object):
                         self.resetbuffer()
 
             if not quiet:
-                self.write(cyan("... {}".format(stmt), bold=(not self._skip_subsequent)))
+                self.write(cyan(f"... {stmt}", bold=(not self._skip_subsequent)))
 
             if self._skip_subsequent:
                 self.session_history.append(stmt)
@@ -570,13 +582,13 @@ class ImprovedConsole(InteractiveConsole, object):
 
     @_doc_to_usage
     def process_edit_cmd(self, arg=''):
-        """{EDIT_CMD} [object|filename]
+        """{config.EDIT_CMD} [object|filename]
 
-        Open {EDITOR} with session history, provided filename or
+        Open {config.EDITOR} with session history, provided filename or
         object's source file.
 
         - without arguments, a temporary file containing session history is
-          created and opened in {EDITOR}. On quitting the editor, all
+          created and opened in {config.EDITOR}. On quitting the editor, all
           the non commented lines in the file are executed, if the
           editor exits with a 0 return code (eg: if editor is `vim`, and
           you exit using `:cq`, nothing from the buffer is executed and
@@ -591,27 +603,25 @@ class ImprovedConsole(InteractiveConsole, object):
         """
         line_num_opt = ''
         if arg:
-            obj = self.lookup(arg)
             try:
-                if obj:
+                if (obj := self.lookup(arg)):
                     filename = inspect.getsourcefile(obj)
                     _, line_no = inspect.getsourcelines(obj)
-                    line_num_opt = config['LINE_NUM_OPT'].format(line_no=line_no)
+                    line_num_opt = config.LINE_NUM_OPT.format(line_no=line_no)
                 else:
                     filename = arg
-
             except (IOError, TypeError, NameError) as e:
                 return self.writeline(e)
         else:
             # - make a list of all lines in history, commenting any non-blank lines.
-            history = self.session_history or open(config['HISTFILE'])
+            history = self.session_history or open(config.HISTFILE)
             filename = self._mktemp_buffer(
-                '# {}'.format(line) if line.strip() else ''
+                f'# {line}' if line.strip() else ''
                 for line in (line.strip('\n') for line in history)
             )
 
         # - shell out to the editor
-        rc = os.system('{} {} {}'.format(config['EDITOR'], line_num_opt, filename))
+        rc = os.system(f'{config.EDITOR} {line_num_opt} {filename}')
 
         # - if arg was not provided (ie: we edited history), execute
         # un-commented lines in the current namespace
@@ -620,23 +630,23 @@ class ImprovedConsole(InteractiveConsole, object):
                 # - if HISTFILE contents were edited (ie: EDIT_CMD in a
                 # brand new session), don't print commented out lines
                 print_comments = (False if history != self.session_history
-                                  else config['POST_EDIT_PRINT_COMMENTS'])
-                self._exec_from_file(filename, print_comments=print_comments)
+                                  else config.POST_EDIT_PRINT_COMMENTS)
+                with open(filename) as edits:
+                    self._exec_from_file(edits, print_comments=print_comments)
             else:
-                self.writeline('{EDITOR} exited with an error code.'
-                               ' Skipping execution.'.format(**config))
+                self.writeline(f'{config.EDITOR} exited with an error code. Skipping execution.')
             os.unlink(filename)
 
     @_doc_to_usage
     def process_sh_cmd(self, cmd):
-        """{SH_EXEC} [cmd [args ...] | {{fmt string}}]
+        """{config.SH_EXEC} [cmd [args ...] | {{fmt string}}]
 
-        Escape to {SHELL} or execute `cmd` in {SHELL}
+        Escape to {config.SHELL} or execute `cmd` in {config.SHELL}
 
         - without arguments, the current interpreter will be suspended
-          and you will be dropped in a {SHELL} prompt. Use fg to return.
+          and you will be dropped in a {config.SHELL} prompt. Use fg to return.
 
-        - with arguments, the text will be executed in {SHELL} and the
+        - with arguments, the text will be executed in {config.SHELL} and the
           output/error will be displayed. Additionally '_' will contain
           a named tuple with the (<stdout>, <stderror>, <return_code>)
           for the execution of the command.
@@ -648,7 +658,8 @@ class ImprovedConsole(InteractiveConsole, object):
         >>> !ls {{filename}}
         ls: cannot access /does/not/exist: No such file or directory
         >>> _
-        CmdExec(out='', err='ls: cannot access /does/not/exist: No such file or directory\n', rc=2)
+        CompletedProcess(arg=['ls'], returncode=0, stdout=b'', stderr=b'ls:
+        cannot access /does/not/exist: No such file or directory\n')
         """
         if cmd:
             try:
@@ -657,13 +668,11 @@ class ImprovedConsole(InteractiveConsole, object):
                 if cmd[0] == 'cd':
                     os.chdir(os.path.expanduser(os.path.expandvars(' '.join(cmd[1:]) or '${HOME}')))
                 else:
-                    cmd_exec = namedtuple('CmdExec', ['out', 'err', 'rc'])
-                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
-                    (out, err), rc = (process.communicate(), process.returncode)
-                    print (red(err.decode('utf-8')) if err else green(out.decode('utf-8'), bold=False))
-                    self.locals['_'] = cmd_exec(out, err, rc)
-                    del cmd_exec
-            except:
+                    completed = subprocess.run(cmd, capture_output=True, env=os.environ, text=True)
+                    out, rc = completed.stdout, completed.returncode
+                    print(red(out) if rc else green(out, bold=False))
+                    self.locals['_'] = completed
+            except Exception:
                 self.showtraceback()
         else:
             if os.getenv('SSH_CONNECTION'):
@@ -673,52 +682,52 @@ class ImprovedConsole(InteractiveConsole, object):
                 #   function rpython { ssh -t $1 -- "python" }
                 # Unfortunately, suspending this ssh session, does not place me
                 # in a shell, so I need to create one:
-                os.system(config['SHELL'])
+                os.system(config.SHELL)
             else:
                 os.kill(os.getpgrp(), signal.SIGSTOP)
 
     @_doc_to_usage
     def process_list_cmd(self, arg):
-        """{LIST_CMD} <object> - List source code for object, if possible.
+        """{config.LIST_CMD} <object> - List source code for object, if possible.
         """
         if not arg:
-            return self.writeline('source list command requires an argument '
-                                  '(eg: {} foo)'.format(config['LIST_CMD']))
+            return self.writeline('source list command requires an '
+                                  f'argument (eg: {config.LIST_CMD} foo)')
         try:
             src_lines, offset = inspect.getsourcelines(self.lookup(arg))
         except (IOError, TypeError, NameError) as e:
             self.writeline(e)
         else:
-            for line_no, line in enumerate(src_lines, offset+1):
-                self.write(cyan("{0:03d}: {1}".format(line_no, line)))
+            for line_no, line in enumerate(src_lines, offset + 1):
+                self.write(cyan(f"{line_no:03d}: {line}"))
 
     def process_help_cmd(self, arg):
         if arg:
             if keyword.iskeyword(arg):
-                self.push('help("{}")'.format(arg))
+                self.push(f'help("{arg}")')
             elif arg in self.commands:
                 self.commands[arg]('-h')
             else:
-                self.push('help({})'.format(arg))
+                self.push(f'help({arg})')
         else:
-            print(cyan(self.__doc__).format(**config))
+            print(cyan(self.__doc__).format(**config.__dict__))
 
     def interact(self):
         """A forgiving wrapper around InteractiveConsole.interact()
         """
         venv_rc_done = cyan('(no venv rc found)')
         try:
-            self._exec_from_file(config['VENV_RC'], quiet=True, skip_history=True)
+            with open(config.VENV_RC) as venv_rc:
+                self._exec_from_file(venv_rc, quiet=True, skip_history=True)
             # - clear out session_history for venv_rc commands
             self.session_history = []
             venv_rc_done = green('Successfully executed venv rc !')
         except IOError:
             pass
 
-        banner = ("Welcome to the ImprovedConsole (version {version})\n"
-                  "Type in {HELP_CMD} for list of features.\n"
-                  "{venv_rc_done}").format(
-                      version=__version__, venv_rc_done=venv_rc_done, **config)
+        banner = (f"Welcome to the ImprovedConsole (version {__version__})\n"
+                  f"Type in {config.HELP_CMD} for list of features.\n"
+                  f"{venv_rc_done}")
 
         retries = 2
         while retries:
@@ -727,7 +736,7 @@ class ImprovedConsole(InteractiveConsole, object):
             except SystemExit:
                 # Fixes #2: exit when 'quit()' invoked
                 break
-            except:
+            except Exception:
                 import traceback
                 retries -= 1
                 print(red("I'm sorry, ImprovedConsole could not handle that !\n"
@@ -749,4 +758,5 @@ class ImprovedConsole(InteractiveConsole, object):
 if not os.getenv('SKIP_PYMP'):
     # - create our pimped out console and fire it up !
     pymp = ImprovedConsole(locals=CLEAN_NS)
+    pymp.locals['__pymp__'] = pymp
     pymp.interact()
