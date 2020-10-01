@@ -230,7 +230,8 @@ class ImprovedCompleter(rlcompleter.Completer):
         except IndexError:
             return None
 
-class ImprovedConsole(InteractiveConsole, object):
+
+class ImprovedConsole(InteractiveConsole):
     """
     Welcome to lonetwin's pimped up python prompt
 
