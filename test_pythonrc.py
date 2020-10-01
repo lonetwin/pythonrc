@@ -266,6 +266,7 @@ class TestImprovedConsole(TestCase):
         """Test edit session"""
         tempfl = StringIO()
         tempfl.name = "/tmp/dummy"
+
         with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
              patch.object(self.pymp, '_exec_from_file') as mocked_exec, \
@@ -347,6 +348,7 @@ class TestImprovedConsole(TestCase):
             self.pymp.process_edit_cmd('')
             self.assertEqual(
                 mock_stderr.getvalue(),
+
                 pythonrc.grey('... # x = 42', bold=False)
             )
 
