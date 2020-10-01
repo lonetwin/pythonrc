@@ -2,6 +2,12 @@
 lonetwin's pimped-up pythonrc
 =============================
 
+.. note::
+
+    This is the Python 2.x version of pythonrc. This version will not recieve
+    any new features but I'll update it for bug fixes if any are reported.
+
+
 What is this ?
 ==============
 
