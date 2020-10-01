@@ -13,6 +13,13 @@ not designed to be used as a separate interactive environment. The intent is to
 keep it as a single file and use it as any other rcfile. This script relies
 solely on the standard python library and will always remain that way.
 
+.. note::
+
+    This branch targets python-3.8+ . If you wish to use/try this out with an
+    earlier version of python please use the support/2.x branch. Any new
+    development will be done on this version but I'm happy to fix any reported
+    bugs on the support/2.x branch.
+
 Demo
 =====
 |demo|
@@ -50,7 +57,7 @@ provides:
 
   * edit the session or a file in your `$EDITOR` (the ``\e`` command)
 
-    - without no arguments, opens your `$EDITOR` with the session hstory
+    - with no arguments, opens your `$EDITOR` with the session hstory
     - with filename argument, opens the file in your `$EDITOR`
     - with object as an argument, opens the source code for the object in `$EDITOR`
 
