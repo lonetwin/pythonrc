@@ -13,12 +13,18 @@ not designed to be used as a separate interactive environment. The intent is to
 keep it as a single file and use it as any other rcfile. This script relies
 solely on the standard python library and will always remain that way.
 
+---------
+
 .. note::
 
-    This branch targets python-3.8+ . If you wish to use/try this out with an
-    earlier version of python please use the support/2.x branch. Any new
+    This branch targets **python-3.8+**. If you wish to use/try this out with an
+    earlier version of python please use the support/2.x_ branch. Any new
     development will be done on this version but I'm happy to fix any reported
-    bugs on the support/2.x branch.
+    bugs on the support/2.x_ branch.
+
+.. _support/2.x: https://github.com/lonetwin/pythonrc/tree/support/py2.x
+
+---------
 
 Demo
 =====
