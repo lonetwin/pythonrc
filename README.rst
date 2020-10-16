@@ -18,11 +18,11 @@ solely on the standard python library and will always remain that way.
 .. note::
 
     This branch targets **python-3.8+**. If you wish to use/try this out with an
-    earlier version of python please use the support/2.x_ branch. Any new
+    earlier version of python please use the `support/2.x`_ branch. Any new
     development will be done on this version but I'm happy to fix any reported
-    bugs on the support/2.x_ branch.
+    bugs on the `support/2.x`_ branch.
 
-.. _support/2.x: https://github.com/lonetwin/pythonrc/tree/support/py2.x
+.. _`support/2.x`: https://github.com/lonetwin/pythonrc/tree/support/py2.x
 
 ---------
 
