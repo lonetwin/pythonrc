@@ -17,12 +17,10 @@ solely on the standard python library and will always remain that way.
 
 .. note::
 
-    This branch targets **python-3.8+**. If you wish to use/try this out with an
-    earlier version of python please use the `support/2.x`_ branch. Any new
-    development will be done on this version but I'm happy to fix any reported
-    bugs on the `support/2.x`_ branch.
-
-.. _`support/2.x`: https://github.com/lonetwin/pythonrc/tree/support/py2.x
+    The `pythonrc.py` file here targets **python-3.8+**. If you wish to use/try
+    this out with an earlier version of python please use the `pythonrc_pre38.py`
+    file instead. Any new development will be done on this version but I'm
+    happy to fix any reported bugs for either.
 
 ---------
 
@@ -34,11 +32,12 @@ Usage
 =====
 
 The `pythonrc` file will be executed when the Python interactive shell is
-started, if `$PYTHONSTARTUP` is in your environment and points to the file.
+started, if `$PYTHONSTARTUP` is in your environment and points to the file (see
+note about version above).
 
 You could also simply make the file executable and call it directly.
 
-Additionally, this file will in turn, execute a virtual env specific rc file [#]_
+Additionally, this file will in turn, execute a virtualenv specific rc file [#]_
 if it exists, for the current session, enabling you to *pre-populate* sessions
 specific to virtual environments.
 
