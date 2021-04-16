@@ -5,7 +5,7 @@ import sys
 import tempfile
 
 from unittest import TestCase, skipIf, skipUnless, main
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, mock_open
 from io import StringIO
 
 
@@ -172,8 +172,8 @@ class TestImprovedConsole(TestCase):
             self.assertEqual(completer('', 0), 'NamedTemporaryFile')
 
         # - pathname completion
-        with patch.object(rl, 'get_line_buffer', return_value='./p'):
-            self.assertEqual(completer('./py', 0), './pythonrc.py')
+        with patch.object(rl, 'get_line_buffer', return_value='./t'):
+            self.assertEqual(completer('./te', 0), './test_pythonrc.py')
 
         mock_input_line = ['/', '/', '/', '/h', '/home/t', '/home/t', '/home/test/f']
         mock_globs = [['/bin', '/home', '/sbin'],
@@ -270,7 +270,7 @@ class TestImprovedConsole(TestCase):
         with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
              patch.object(self.pymp, '_exec_from_file') as mocked_exec, \
-             patch.object(__builtins__, 'open', return_value=tempfl), \
+             patch.object(pythonrc, 'open', return_value=tempfl), \
              patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
                           return_value=tempfl.name):
             self.pymp.session_history = 'x = 42'
@@ -288,7 +288,7 @@ class TestImprovedConsole(TestCase):
         with patch.object(pythonrc.os, 'system', return_value=0) as mocked_system, \
              patch.object(pythonrc.os, 'unlink') as mocked_unlink, \
              patch.object(self.pymp, '_exec_from_file') as mocked_exec, \
-             patch.object(__builtins__, 'open', return_value=tempfl), \
+             patch.object(pythonrc, 'open', return_value=tempfl), \
              patch.object(pythonrc.ImprovedConsole, '_mktemp_buffer',
                           return_value=tempfl.name):
             self.pymp.session_history = []
