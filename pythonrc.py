@@ -109,6 +109,8 @@ config = SimpleNamespace(
     COMPLETION_EXPANDS_TILDE = True,
     # - when executing edited history, should we also print comments
     POST_EDIT_PRINT_COMMENTS = True,
+    # - Attempt to auto-import top-level module names on NameError
+    ENABLE_AUTO_IMPORTS = True
 )
 
 # Color functions. These get initialized in init_color_functions() later
@@ -493,6 +495,28 @@ class ImprovedConsole(InteractiveConsole):
         else:
             self._indent = ''
         return more
+
+    def runcode(self, code):
+        """Wrapper around super().runcode() to enable auto-importing"""
+
+        if not config.ENABLE_AUTO_IMPORTS:
+            return super().runcode(code)
+
+        try:
+            exec(code, self.locals)
+        except NameError as err:
+            if (match := re.search(r"'(\w+)' is not defined", err.args[0])):
+                name = match.group(1)
+                if name in self.completer.modlist:
+                    mod = importlib.import_module(name)
+                    print(grey(f'# imported undefined module: {name}', bold=False))
+                    self.locals[name] = mod
+                    return self.runcode(code)
+            self.showtraceback()
+        except SystemExit:
+            raise
+        except Exception:
+            self.showtraceback()
 
     def write(self, data):
         """Write out data to stderr
