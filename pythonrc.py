@@ -215,15 +215,13 @@ class ImprovedCompleter(rlcompleter.Completer):
             else:
                 self.matches = self.global_matches(text)
 
-            if self.matches and self.matches[-1] is None:
+            if len(self.matches) == 1:
                 match = self.matches[0]
                 if keyword.iskeyword(match) and match in ('raise', 'except'):
-                    self.matches = self.exceptions()
+                    self.matches.extend(self.exceptions())
 
                 if match and match.endswith(os.path.sep):
-                    self.matches = self.get_path_matches(match)
-
-            self.matches.append(None)
+                    self.matches.extend(self.get_path_matches(match))
 
         try:
             return self.matches[state]
