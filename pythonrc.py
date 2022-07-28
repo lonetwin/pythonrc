@@ -56,7 +56,7 @@ enabled however it does not do pathname completion
 try:
     import sys
 
-    __IPYTHON__ and sys.exit(0)
+    __IPYTHON__ and sys.exit(0)  # type: ignore
 except NameError:
     pass
 
@@ -244,6 +244,16 @@ class ImprovedCompleter(rlcompleter.Completer):
             return None
 
 
+def _doc_to_usage(method):
+    def inner(self, arg):
+        arg = arg.strip()
+        if arg.startswith(("-h", "--help")):
+            return self.writeline(blue(method.__doc__.strip()))
+        return method(self, arg)
+
+    return inner
+
+
 class ImprovedConsole(InteractiveConsole):
     """
     Welcome to lonetwin's pimped up python prompt
@@ -306,15 +316,6 @@ class ImprovedConsole(InteractiveConsole):
                 "|".join(re.escape(cmd) for cmd in self.commands)
             )
         )
-
-    def _doc_to_usage(method):
-        def inner(self, arg):
-            arg = arg.strip()
-            if arg.startswith(("-h", "--help")):
-                return self.writeline(blue(method.__doc__.strip()))
-            return method(self, arg)
-
-        return inner
 
     def init_color_functions(self):
         """Populates globals dict with some helper functions for colorizing text"""
@@ -826,5 +827,5 @@ class ImprovedConsole(InteractiveConsole):
 if not os.getenv("SKIP_PYMP"):
     # - create our pimped out console and fire it up !
     pymp = ImprovedConsole(locals=CLEAN_NS)
-    pymp.locals["__pymp__"] = pymp
+    CLEAN_NS["__pymp__"] = pymp
     pymp.interact()
