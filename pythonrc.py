@@ -661,11 +661,13 @@ class ImprovedConsole(InteractiveConsole):
                 return self.writeline(e)
         else:
             # - make a list of all lines in history, commenting any non-blank lines.
-            history = self.session_history or open(config.HISTFILE)
+            if not (history := self.session_history):
+                history = open(config.HISTFILE).readlines()
             filename = self._mktemp_buffer(
                 f"# {line}" if line.strip() else ""
                 for line in (line.strip("\n") for line in history)
             )
+            line_num_opt = config.LINE_NUM_OPT.format(line_no=len(history))
 
         # - shell out to the editor
         rc = os.system(f"{config.EDITOR} {line_num_opt} {filename}")
