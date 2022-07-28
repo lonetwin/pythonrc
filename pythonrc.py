@@ -60,7 +60,10 @@ try:
 except NameError:
     pass
 
+import ast
+import asyncio
 import atexit
+import concurrent
 import glob
 import importlib
 import inspect
@@ -74,13 +77,15 @@ import rlcompleter
 import shlex
 import signal
 import subprocess
+import threading
+import warnings
 import webbrowser
 from code import InteractiveConsole
 from functools import cached_property, lru_cache, partial
 from itertools import chain
 from operator import attrgetter
 from tempfile import NamedTemporaryFile
-from types import SimpleNamespace
+from types import FunctionType, ModuleType, SimpleNamespace
 
 __version__ = "0.9.0"
 
@@ -108,9 +113,11 @@ config = SimpleNamespace(
     # - should path completion expand ~ using os.path.expanduser()
     COMPLETION_EXPANDS_TILDE=True,
     # - when executing edited history, should we also print comments
-    POST_EDIT_PRINT_COMMENTS = True,
+    POST_EDIT_PRINT_COMMENTS=True,
     # - Attempt to auto-import top-level module names on NameError
-    ENABLE_AUTO_IMPORTS = True
+    ENABLE_AUTO_IMPORTS=True,
+    # - Start/Stop the asyncio loop in the interpreter (similar to `python -m asyncio`)
+    TOGGLE_ASYNCIO_LOOP_CMD=r"\A",
 )
 
 # Color functions. These get initialized in init_color_functions() later
@@ -297,7 +304,9 @@ class ImprovedConsole(InteractiveConsole):
         self.session_history = []  # This holds the last executed statements
         self.buffer = []  # This holds the statement to be executed
         self._indent = ""
+        self.loop = None
         super(ImprovedConsole, self).__init__(*args, **kwargs)
+
         self.init_color_functions()
         self.init_readline()
         self.init_prompt()
@@ -309,6 +318,7 @@ class ImprovedConsole(InteractiveConsole):
             config.SH_EXEC: self.process_sh_cmd,
             config.HELP_CMD: self.process_help_cmd,
             config.TOGGLE_AUTO_INDENT_CMD: self.toggle_auto_indent,
+            config.TOGGLE_ASYNCIO_LOOP_CMD: self.toggle_asyncio,
         }
         # - regex to identify and extract commands and their arguments
         self.commands_re = re.compile(
@@ -387,14 +397,14 @@ class ImprovedConsole(InteractiveConsole):
         self.completer = ImprovedCompleter(self.locals)
         readline.set_completer(self.completer.complete)
 
-    def init_prompt(self):
+    def init_prompt(self, nested=False):
         """Activates color on the prompt based on python version.
 
         Also adds the hosts IP if running on a remote host over a
         ssh connection.
         """
         prompt_color = green if sys.version_info.major == 2 else yellow
-        sys.ps1 = prompt_color(">>> ", readline_workaround=True)
+        sys.ps1 = prompt_color(">=> " if nested else ">>> ", readline_workaround=True)
         sys.ps2 = red("... ", readline_workaround=True)
         # - if we are over a remote connection, modify the ps1
         if os.getenv("SSH_CONNECTION"):
@@ -430,6 +440,94 @@ class ImprovedConsole(InteractiveConsole):
             self.locals["_"] = value
 
         sys.displayhook = pprint_callback
+
+    def _init_nested_repl(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+        self.locals["asyncio"] = asyncio
+        self.locals["repl_future"] = None
+        self.locals["repl_future_interrupted"] = False
+        self.runcode = self.runcode_async
+
+        def repl_thread():
+            try:
+                self.init_prompt(nested=True)
+                self.interact(
+                    banner=(
+                        "An asyncio loop has been started in the main thread.\n"
+                        "This nested interpreter is now running in a seperate thread.\n"
+                        f"Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to stop the asyncio loop "
+                        "and simply exit this nested interpreter to stop this thread\n"
+                    ),
+                    exitmsg="exiting nested REPL, exit again to quit main thread...\n",
+                )
+            finally:
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"^coroutine .* was never awaited$",
+                    category=RuntimeWarning,
+                )
+                if self.loop.is_running():
+                    self.loop.call_soon_threadsafe(self.loop.stop)
+                    del self.locals["repl_future"]
+                    del self.locals["repl_future_interrupted"]
+                    self.runcode = self.runcode_sync
+                    self.loop = None
+
+                self.init_prompt()
+                threading.main_thread().join()
+
+        self.repl_thread = threading.Thread(target=repl_thread, daemon=True)
+        self.repl_thread.start()
+
+    def _start_asyncio_loop(self):
+        self.locals["repl_future"] = None
+        self.locals["repl_future_interrupted"] = False
+        self.runcode = self.runcode_async
+
+        while True:
+            try:
+                self.loop.run_forever()
+            except KeyboardInterrupt:
+                if (
+                    repl_future := self.locals["repl_future"]
+                ) and not repl_future.done():
+                    repl_future.cancel()
+                    self.locals["repl_future_interrupted"] = True
+                continue
+            else:
+                break
+        self.runcode = self.runcode_sync
+
+    @_doc_to_usage
+    def toggle_asyncio(self, _):
+        """{config.TOGGLE_ASYNCIO_LOOP_CMD} - Starts/stops the asyncio loop
+
+        Configures the interpreter in a similar manner to `python -m asyncio`
+        """
+        if self.loop is None:
+            self._init_nested_repl()
+            self._start_asyncio_loop()
+        elif not self.loop.is_running():
+            print(red("Restarting previously stopped asyncio loop"))
+            self._start_asyncio_loop()
+        else:
+            if (
+                repl_future := self.locals.get("repl_future", None)
+            ) and not repl_future.done():
+                repl_future.cancel()
+
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            print(
+                red(
+                    f"Stopped the asyncio loop. Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to restart it."
+                )
+            )
+
+            del self.locals["repl_future"]
+            del self.locals["repl_future_interrupted"]
+            self.runcode = self.runcode_sync
 
     def auto_indent_hook(self):
         """Hook called by readline between printing the prompt and
@@ -515,7 +613,50 @@ class ImprovedConsole(InteractiveConsole):
             self._indent = ""
         return more
 
-    def runcode(self, code):
+    def runcode_async(self, code):
+        future = concurrent.futures.Future()
+
+        def callback():
+            self.locals["repl_future"] = None
+            self.locals["repl_future_interrupted"] = False
+
+            func = FunctionType(code, self.locals)
+            try:
+                coro = func()
+            except SystemExit:
+                raise
+            except KeyboardInterrupt as ex:
+                self.locals["repl_future_interrupted"] = True
+                future.set_exception(ex)
+                return
+            except BaseException as ex:
+                future.set_exception(ex)
+                return
+
+            if not inspect.iscoroutine(coro):
+                future.set_result(coro)
+                return
+
+            try:
+                self.locals["repl_future"] = self.loop.create_task(coro)
+                asyncio.futures._chain_future(self.locals["repl_future"], future)
+            except BaseException as exc:
+                future.set_exception(exc)
+
+        self.loop.call_soon_threadsafe(callback)
+
+        try:
+            return future.result()
+        except SystemExit:
+            raise
+        except BaseException:
+            self.write("\nKeyboardInterrupt\n")
+            if self.locals["repl_future_interrupted"]:
+                self.write("\nKeyboardInterrupt\n")
+            else:
+                self.showtraceback()
+
+    def runcode_sync(self, code):
         """Wrapper around super().runcode() to enable auto-importing"""
 
         if not config.ENABLE_AUTO_IMPORTS:
@@ -524,11 +665,11 @@ class ImprovedConsole(InteractiveConsole):
         try:
             exec(code, self.locals)
         except NameError as err:
-            if (match := re.search(r"'(\w+)' is not defined", err.args[0])):
+            if match := re.search(r"'(\w+)' is not defined", err.args[0]):
                 name = match.group(1)
                 if name in self.completer.modlist:
                     mod = importlib.import_module(name)
-                    print(grey(f'# imported undefined module: {name}', bold=False))
+                    print(grey(f"# imported undefined module: {name}", bold=False))
                     self.locals[name] = mod
                     return self.runcode(code)
             self.showtraceback()
@@ -536,6 +677,8 @@ class ImprovedConsole(InteractiveConsole):
             raise
         except Exception:
             self.showtraceback()
+
+    runcode = runcode_sync
 
     def write(self, data):
         """Write out data to stderr"""
@@ -762,6 +905,37 @@ class ImprovedConsole(InteractiveConsole):
             for line_no, line in enumerate(src_lines, offset + 1):
                 self.write(cyan(f"{line_no:03d}: {line}"))
 
+    @_doc_to_usage
+    def process_reload_cmd(self, arg):
+        """{config.RELOAD_CMD} <object> - Reload object, if possible.
+
+        - if argument is a module, simply call importlib.reload() for it.
+
+        - if argument is not a module, try hard to re-execute the
+        (presumably updated) source code in the namespace of the object,
+        in effect reloading it.
+
+        credit: inspired by the description at https://github.com/hoh/reloadr
+        """
+        if not arg:
+            return self.writeline(
+                "reload command requires an " f"argument (eg: {config.RELOAD_CMD} foo)"
+            )
+
+        try:
+            obj = self.lookup(arg)
+            if isinstance(obj, ModuleType):
+                self.locals[arg] = importlib.reload(obj)
+            else:
+                namespace = inspect.getmodule(obj)
+                exec(
+                    compile(inspect.getsource(obj), namespace.__file__, "exec"),
+                    namespace.__dict__,
+                    self.locals,
+                )
+        except OSError as e:
+            self.writeline(e)
+
     def process_help_cmd(self, arg):
         if arg:
             if keyword.iskeyword(arg):
@@ -773,7 +947,7 @@ class ImprovedConsole(InteractiveConsole):
         else:
             print(cyan(self.__doc__).format(**config.__dict__))
 
-    def interact(self):
+    def interact(self, banner="", exitmsg=""):
         """A forgiving wrapper around InteractiveConsole.interact()"""
         venv_rc_done = cyan("(no venv rc found)")
         try:
@@ -785,16 +959,17 @@ class ImprovedConsole(InteractiveConsole):
         except IOError:
             pass
 
-        banner = (
-            f"Welcome to the ImprovedConsole (version {__version__})\n"
-            f"Type in {config.HELP_CMD} for list of features.\n"
-            f"{venv_rc_done}"
-        )
+        if not banner:
+            banner = (
+                f"Welcome to the ImprovedConsole (version {__version__})\n"
+                f"Type in {config.HELP_CMD} for list of features.\n"
+                f"{venv_rc_done}"
+            )
 
         retries = 2
         while retries:
             try:
-                super(ImprovedConsole, self).interact(banner=banner)
+                super(ImprovedConsole, self).interact(banner=banner, exitmsg=exitmsg)
             except SystemExit:
                 # Fixes #2: exit when 'quit()' invoked
                 break
