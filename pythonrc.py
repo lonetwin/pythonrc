@@ -456,11 +456,11 @@ class ImprovedConsole(InteractiveConsole):
                 self.interact(
                     banner=(
                         "An asyncio loop has been started in the main thread.\n"
-                        "This nested interpreter is now running in a seperate thread.\n"
+                        "This nested interpreter is now running in a separate thread.\n"
                         f"Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to stop the asyncio loop "
                         "and simply exit this nested interpreter to stop this thread\n"
                     ),
-                    exitmsg="exiting nested REPL, exit again to quit main thread...\n",
+                    exitmsg="exiting nested REPL...\n",
                 )
             finally:
                 warnings.filterwarnings(
@@ -468,17 +468,12 @@ class ImprovedConsole(InteractiveConsole):
                     message=r"^coroutine .* was never awaited$",
                     category=RuntimeWarning,
                 )
-                if self.loop.is_running():
-                    self.loop.call_soon_threadsafe(self.loop.stop)
-                    del self.locals["repl_future"]
-                    del self.locals["repl_future_interrupted"]
-                    self.runcode = self.runcode_sync
-                    self.loop = None
+                if self.loop and self.loop.is_running():
+                    self.loop.call_soon_threadsafe(self._stop_asyncio_loop)
 
                 self.init_prompt()
-                threading.main_thread().join()
 
-        self.repl_thread = threading.Thread(target=repl_thread, daemon=True)
+        self.repl_thread = threading.Thread(target=repl_thread)
         self.repl_thread.start()
 
     def _start_asyncio_loop(self):
@@ -486,7 +481,7 @@ class ImprovedConsole(InteractiveConsole):
         self.locals["repl_future_interrupted"] = False
         self.runcode = self.runcode_async
 
-        while True:
+        while self.loop is not None:
             try:
                 self.loop.run_forever()
             except KeyboardInterrupt:
@@ -495,10 +490,19 @@ class ImprovedConsole(InteractiveConsole):
                 ) and not repl_future.done():
                     repl_future.cancel()
                     self.locals["repl_future_interrupted"] = True
-                continue
-            else:
-                break
+
+    def _stop_asyncio_loop(self):
+        self.loop.stop()
+        del self.locals["repl_future"]
+        del self.locals["repl_future_interrupted"]
         self.runcode = self.runcode_sync
+        self.loop = None
+        print(
+            red(
+                "Stopped the asyncio loop. "
+                f"Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to restart it.\n"
+            )
+        )
 
     @_doc_to_usage
     def toggle_asyncio(self, _):
@@ -518,16 +522,7 @@ class ImprovedConsole(InteractiveConsole):
             ) and not repl_future.done():
                 repl_future.cancel()
 
-            self.loop.call_soon_threadsafe(self.loop.stop)
-            print(
-                red(
-                    f"Stopped the asyncio loop. Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to restart it."
-                )
-            )
-
-            del self.locals["repl_future"]
-            del self.locals["repl_future_interrupted"]
-            self.runcode = self.runcode_sync
+            self.loop.call_soon_threadsafe(self._stop_asyncio_loop)
 
     def auto_indent_hook(self):
         """Hook called by readline between printing the prompt and
@@ -967,7 +962,8 @@ class ImprovedConsole(InteractiveConsole):
                 break
 
         # Exit the Python shell on exiting the InteractiveConsole
-        sys.exit()
+        if threading.current_thread() == threading.main_thread():
+            sys.exit()
 
 
 if not os.getenv("SKIP_PYMP"):
