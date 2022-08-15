@@ -85,7 +85,7 @@ from functools import cached_property, lru_cache, partial
 from itertools import chain
 from operator import attrgetter
 from tempfile import NamedTemporaryFile
-from types import FunctionType, ModuleType, SimpleNamespace
+from types import FunctionType, SimpleNamespace
 
 __version__ = "0.9.0"
 
@@ -904,37 +904,6 @@ class ImprovedConsole(InteractiveConsole):
         else:
             for line_no, line in enumerate(src_lines, offset + 1):
                 self.write(cyan(f"{line_no:03d}: {line}"))
-
-    @_doc_to_usage
-    def process_reload_cmd(self, arg):
-        """{config.RELOAD_CMD} <object> - Reload object, if possible.
-
-        - if argument is a module, simply call importlib.reload() for it.
-
-        - if argument is not a module, try hard to re-execute the
-        (presumably updated) source code in the namespace of the object,
-        in effect reloading it.
-
-        credit: inspired by the description at https://github.com/hoh/reloadr
-        """
-        if not arg:
-            return self.writeline(
-                "reload command requires an " f"argument (eg: {config.RELOAD_CMD} foo)"
-            )
-
-        try:
-            obj = self.lookup(arg)
-            if isinstance(obj, ModuleType):
-                self.locals[arg] = importlib.reload(obj)
-            else:
-                namespace = inspect.getmodule(obj)
-                exec(
-                    compile(inspect.getsource(obj), namespace.__file__, "exec"),
-                    namespace.__dict__,
-                    self.locals,
-                )
-        except OSError as e:
-            self.writeline(e)
 
     def process_help_cmd(self, arg):
         if arg:
