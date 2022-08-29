@@ -460,7 +460,7 @@ class ImprovedConsole(InteractiveConsole):
                         f"Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to stop the asyncio loop "
                         "and simply exit this nested interpreter to stop this thread\n"
                     ),
-                    exitmsg="exiting nested REPL...\n",
+                    exitmsg="now exiting nested REPL...\n",
                 )
             finally:
                 warnings.filterwarnings(
@@ -497,10 +497,10 @@ class ImprovedConsole(InteractiveConsole):
         del self.locals["repl_future_interrupted"]
         self.runcode = self.runcode_sync
         self.loop = None
-        print(
-            red(
+        self.writeline(
+            grey(
                 "Stopped the asyncio loop. "
-                f"Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to restart it.\n"
+                f"Use {config.TOGGLE_ASYNCIO_LOOP_CMD} to restart it."
             )
         )
 
@@ -514,7 +514,7 @@ class ImprovedConsole(InteractiveConsole):
             self._init_nested_repl()
             self._start_asyncio_loop()
         elif not self.loop.is_running():
-            print(red("Restarting previously stopped asyncio loop"))
+            self.writeline(grey("Restarting previously stopped asyncio loop"))
             self._start_asyncio_loop()
         else:
             if (
@@ -620,11 +620,9 @@ class ImprovedConsole(InteractiveConsole):
                 coro = func()
             except SystemExit:
                 raise
-            except KeyboardInterrupt as ex:
-                self.locals["repl_future_interrupted"] = True
-                future.set_exception(ex)
-                return
             except BaseException as ex:
+                if isinstance(ex, KeyboardInterrupt):
+                    self.locals["repl_future_interrupted"] = True
                 future.set_exception(ex)
                 return
 
@@ -645,7 +643,6 @@ class ImprovedConsole(InteractiveConsole):
         except SystemExit:
             raise
         except BaseException:
-            self.write("\nKeyboardInterrupt\n")
             if self.locals["repl_future_interrupted"]:
                 self.write("\nKeyboardInterrupt\n")
             else:
@@ -911,7 +908,7 @@ class ImprovedConsole(InteractiveConsole):
         else:
             print(cyan(self.__doc__).format(**config.__dict__))
 
-    def interact(self, banner="", exitmsg=""):
+    def interact(self, banner=None, exitmsg=None):
         """A forgiving wrapper around InteractiveConsole.interact()"""
         venv_rc_done = cyan("(no venv rc found)")
         try:
@@ -923,7 +920,7 @@ class ImprovedConsole(InteractiveConsole):
         except IOError:
             pass
 
-        if not banner:
+        if banner is None:
             banner = (
                 f"Welcome to the ImprovedConsole (version {__version__})\n"
                 f"Type in {config.HELP_CMD} for list of features.\n"
